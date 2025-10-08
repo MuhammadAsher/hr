@@ -5,6 +5,7 @@ import 'apply_leave_screen.dart';
 import 'payslips_screen.dart';
 import 'my_attendance_screen.dart';
 import 'my_tasks_screen.dart';
+import 'team_directory_screen.dart';
 
 class EmployeeDashboard extends StatelessWidget {
   const EmployeeDashboard({super.key});
@@ -61,15 +62,13 @@ class EmployeeDashboard extends StatelessWidget {
                           ),
                           Text(
                             user?.name ?? 'Employee',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           Text(
                             user?.email ?? '',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey[600],
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.grey[600]),
                           ),
                         ],
                       ),
@@ -83,9 +82,9 @@ class EmployeeDashboard extends StatelessWidget {
             // My Stats
             Text(
               'My Stats',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Row(
@@ -140,9 +139,9 @@ class EmployeeDashboard extends StatelessWidget {
             // Quick Actions
             Text(
               'Quick Actions',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             _buildActionButton(
@@ -173,41 +172,32 @@ class EmployeeDashboard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'My Attendance',
-              Icons.access_time,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MyAttendanceScreen(),
-                  ),
-                );
-              },
-            ),
+            _buildActionButton(context, 'My Attendance', Icons.access_time, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const MyAttendanceScreen(),
+                ),
+              );
+            }),
             const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'My Tasks',
-              Icons.assignment,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const MyTasksScreen(),
-                  ),
-                );
-              },
-            ),
+            _buildActionButton(context, 'My Tasks', Icons.assignment, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (context) => const MyTasksScreen()),
+              );
+            }),
             const SizedBox(height: 12),
             _buildActionButton(
               context,
               'Team Directory',
               Icons.people_outline,
               () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Team Directory - Coming Soon')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const TeamDirectoryScreen(),
+                  ),
                 );
               },
             ),
@@ -236,16 +226,16 @@ class EmployeeDashboard extends StatelessWidget {
             Text(
               value,
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               title,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
             ),
           ],
         ),
@@ -270,4 +260,3 @@ class EmployeeDashboard extends StatelessWidget {
     );
   }
 }
-

@@ -3,6 +3,11 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import 'employee_management_screen.dart';
 import 'leave_management_screen.dart';
+import 'department_management_screen.dart';
+import 'reports_analytics_screen.dart';
+import 'pdf_generation_screen.dart';
+import 'email_notifications_screen.dart';
+import 'advanced_reporting_screen.dart';
 
 class AdminDashboard extends StatelessWidget {
   const AdminDashboard({super.key});
@@ -59,15 +64,13 @@ class AdminDashboard extends StatelessWidget {
                           ),
                           Text(
                             user?.name ?? 'Admin',
-                            style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                                  fontWeight: FontWeight.bold,
-                                ),
+                            style: Theme.of(context).textTheme.headlineSmall
+                                ?.copyWith(fontWeight: FontWeight.bold),
                           ),
                           Text(
                             user?.email ?? '',
-                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                                  color: Colors.grey[600],
-                                ),
+                            style: Theme.of(context).textTheme.bodySmall
+                                ?.copyWith(color: Colors.grey[600]),
                           ),
                         ],
                       ),
@@ -81,9 +84,9 @@ class AdminDashboard extends StatelessWidget {
             // Statistics Cards
             Text(
               'Overview',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             Row(
@@ -138,9 +141,9 @@ class AdminDashboard extends StatelessWidget {
             // Quick Actions
             Text(
               'Quick Actions',
-              style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
             ),
             const SizedBox(height: 16),
             _buildActionButton(
@@ -171,24 +174,62 @@ class AdminDashboard extends StatelessWidget {
               },
             ),
             const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'View Reports',
-              Icons.analytics,
-              () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('View Reports - Coming Soon')),
-                );
-              },
-            ),
+            _buildActionButton(context, 'View Reports', Icons.analytics, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const ReportsAnalyticsScreen(),
+                ),
+              );
+            }),
             const SizedBox(height: 12),
             _buildActionButton(
               context,
               'Manage Departments',
               Icons.corporate_fare,
               () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Manage Departments - Coming Soon')),
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const DepartmentManagementScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildActionButton(
+              context,
+              'Generate PDFs',
+              Icons.picture_as_pdf,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PdfGenerationScreen(),
+                  ),
+                );
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildActionButton(context, 'Email Notifications', Icons.email, () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const EmailNotificationsScreen(),
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+            _buildActionButton(
+              context,
+              'Advanced Reports',
+              Icons.analytics_outlined,
+              () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AdvancedReportingScreen(),
+                  ),
                 );
               },
             ),
@@ -217,16 +258,16 @@ class AdminDashboard extends StatelessWidget {
             Text(
               value,
               style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                    color: color,
-                  ),
+                fontWeight: FontWeight.bold,
+                color: color,
+              ),
             ),
             const SizedBox(height: 4),
             Text(
               title,
-              style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                    color: Colors.grey[600],
-                  ),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(color: Colors.grey[600]),
             ),
           ],
         ),
@@ -251,4 +292,3 @@ class AdminDashboard extends StatelessWidget {
     );
   }
 }
-
