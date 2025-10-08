@@ -5,12 +5,16 @@ class User {
   final String email;
   final String name;
   final UserRole role;
+  final String organizationId; // Link to organization
+  final bool isSuperAdmin; // Platform super admin (for your company)
 
   User({
     required this.id,
     required this.email,
     required this.name,
     required this.role,
+    required this.organizationId,
+    this.isSuperAdmin = false,
   });
 
   Map<String, dynamic> toJson() {
@@ -19,6 +23,8 @@ class User {
       'email': email,
       'name': name,
       'role': role.name,
+      'organizationId': organizationId,
+      'isSuperAdmin': isSuperAdmin,
     };
   }
 
@@ -31,7 +37,8 @@ class User {
         (e) => e.name == json['role'],
         orElse: () => UserRole.employee,
       ),
+      organizationId: json['organizationId'] as String? ?? '',
+      isSuperAdmin: json['isSuperAdmin'] as bool? ?? false,
     );
   }
 }
-

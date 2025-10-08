@@ -4,6 +4,7 @@ import 'providers/auth_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/employee_dashboard.dart';
+import 'screens/super_admin_dashboard.dart';
 import 'models/user_role.dart';
 
 void main() {
@@ -40,9 +41,7 @@ class AuthWrapper extends StatelessWidget {
         // Show loading screen while checking auth status
         if (authProvider.isLoading) {
           return const Scaffold(
-            body: Center(
-              child: CircularProgressIndicator(),
-            ),
+            body: Center(child: CircularProgressIndicator()),
           );
         }
 
@@ -50,7 +49,12 @@ class AuthWrapper extends StatelessWidget {
         if (authProvider.isAuthenticated) {
           final user = authProvider.currentUser!;
 
-          if (user.role == UserRole.admin) {
+          // Check if super admin (platform administrator)
+          if (user.isSuperAdmin) {
+            return const SuperAdminDashboard();
+          }
+          // Check role for organization users
+          else if (user.role == UserRole.admin) {
             return const AdminDashboard();
           } else {
             return const EmployeeDashboard();
