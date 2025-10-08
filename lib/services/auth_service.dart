@@ -2,12 +2,18 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import '../models/user_role.dart';
+import 'api_client.dart';
 
 class AuthService {
   static const String _userKey = 'current_user';
+  final ApiClient _apiClient = ApiClient();
 
-  // Mock credentials for demo purposes
-  // In production, this would connect to a real backend API
+  // Initialize API client
+  Future<void> initialize() async {
+    await _apiClient.initialize();
+  }
+
+  // Mock credentials for demo purposes (fallback)
   final Map<String, Map<String, dynamic>> _mockUsers = {
     // Super Admin (Platform Administrator)
     'superadmin@hrplatform.com': {
@@ -57,6 +63,45 @@ class AuthService {
   };
 
   Future<User?> login(String email, String password, UserRole role) async {
+    try {
+      // Try API login first
+      final response = await _apiClient.login(email, password, role.name);
+
+      if (response.isSuccess) {
+        final userData = response.data['user'];
+        final token = response.data['token'];
+        final refreshToken = response.data['refreshToken'];
+
+        // Store tokens
+        await _apiClient.setTokens(token, refreshToken);
+
+        // Create user object
+        final user = User(
+          id: userData['id'],
+          email: userData['email'],
+          name: userData['name'],
+          role: UserRole.values.firstWhere(
+            (e) => e.name == userData['role'],
+            orElse: () => UserRole.employee,
+          ),
+          organizationId: userData['organizationId'] ?? '',
+          isSuperAdmin: userData['isSuperAdmin'] ?? false,
+        );
+
+        // Save user to local storage
+        await _saveUser(user);
+        return user;
+      }
+    } catch (e) {
+      print('API login failed, falling back to mock: $e');
+    }
+
+    // Fallback to mock login for development
+    return _mockLogin(email, password, role);
+  }
+
+  // Mock login fallback
+  Future<User?> _mockLogin(String email, String password, UserRole role) async {
     // Simulate network delay
     await Future.delayed(const Duration(seconds: 1));
 
@@ -84,6 +129,15 @@ class AuthService {
   }
 
   Future<void> logout() async {
+    try {
+      // Try API logout
+      await _apiClient.logout();
+    } catch (e) {
+      // Ignore API logout errors
+    }
+
+    // Clear tokens and local storage
+    await _apiClient.clearTokens();
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_userKey);
   }

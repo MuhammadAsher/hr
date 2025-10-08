@@ -49,6 +49,37 @@ class Employee {
     );
   }
 
+  // Factory constructor for API JSON (with different field names)
+  factory Employee.fromApiJson(Map<String, dynamic> json) {
+    return Employee(
+      id: json['id'] as String,
+      name: json['name'] as String,
+      email: json['email'] as String,
+      department: json['department'] as String,
+      position: json['position'] as String,
+      phone: json['phone'] as String? ?? '',
+      joinDate: DateTime.parse(json['join_date'] ?? json['joinDate'] as String),
+      salary: double.parse(json['salary'].toString()),
+      status: _capitalizeStatus(json['status'] as String? ?? 'active'),
+    );
+  }
+
+  // Helper method to capitalize status
+  static String _capitalizeStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'active':
+        return 'Active';
+      case 'inactive':
+        return 'Inactive';
+      case 'on_leave':
+        return 'On Leave';
+      case 'terminated':
+        return 'Terminated';
+      default:
+        return 'Active';
+    }
+  }
+
   Employee copyWith({
     String? id,
     String? name,
@@ -73,4 +104,3 @@ class Employee {
     );
   }
 }
-

@@ -6,8 +6,14 @@ import 'screens/admin_dashboard.dart';
 import 'screens/employee_dashboard.dart';
 import 'screens/super_admin_dashboard.dart';
 import 'models/user_role.dart';
+import 'services/api_client.dart';
 
-void main() {
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize API client
+  await ApiClient().initialize();
+
   runApp(const MyApp());
 }
 

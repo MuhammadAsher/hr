@@ -1,0 +1,783 @@
+openapi: 3.0.3
+info:
+  title: HR Management SaaS Platform API
+  description: |
+    Multi-tenant HR Management System API for managing organizations, employees, 
+    leave requests, attendance, payroll, and more.
+    
+    ## Authentication
+    All endpoints (except registration and login) require JWT authentication.
+    Include the token in the Authorization header: `Bearer <token>`
+    
+    ## Multi-Tenancy
+    All data is scoped to the authenticated user's organization.
+    Super admins can access cross-organization data.
+    
+  version: 1.0.0
+  contact:
+    name: HR Platform Support
+    email: support@hrplatform.com
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: https://api.hrplatform.com/v1
+    description: Production server
+  - url: https://staging-api.hrplatform.com/v1
+    description: Staging server
+  - url: http://localhost:3000/v1
+    description: Local development server
+
+tags:
+  - name: Authentication
+    description: User authentication and authorization
+  - name: Organizations
+    description: Organization management (Super Admin only)
+  - name: Users
+    description: User management
+  - name: Employees
+    description: Employee management
+  - name: Departments
+    description: Department management
+  - name: Leave Requests
+    description: Leave request management
+  - name: Attendance
+    description: Attendance tracking
+  - name: Tasks
+    description: Task management
+  - name: Payslips
+    description: Payroll and payslip management
+  - name: Reports
+    description: Analytics and reporting
+  - name: Notifications
+    description: Email notifications
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from login endpoint
+
+  schemas:
+    # Authentication Schemas
+    LoginRequest:
+      type: object
+      required:
+        - email
+        - password
+        - role
+      properties:
+        email:
+          type: string
+          format: email
+          example: admin@hr.com
+        password:
+          type: string
+          format: password
+          example: admin123
+        role:
+          type: string
+          enum: [admin, employee]
+          example: admin
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          example: eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+        user:
+          $ref: '#/components/schemas/User'
+        expiresIn:
+          type: integer
+          example: 86400
+          description: Token expiration time in seconds
+
+    # User Schemas
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          example: user_123
+        email:
+          type: string
+          format: email
+          example: admin@hr.com
+        name:
+          type: string
+          example: John Doe
+        role:
+          type: string
+          enum: [admin, employee]
+          example: admin
+        organizationId:
+          type: string
+          example: org_001
+        isSuperAdmin:
+          type: boolean
+          example: false
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Organization Schemas
+    Organization:
+      type: object
+      properties:
+        id:
+          type: string
+          example: org_001
+        name:
+          type: string
+          example: Tech Solutions Inc.
+        email:
+          type: string
+          format: email
+          example: contact@techsolutions.com
+        phone:
+          type: string
+          example: +1-555-1234
+        address:
+          type: string
+          example: 123 Tech Street, Silicon Valley, CA
+        industry:
+          type: string
+          example: Technology
+        logo:
+          type: string
+          format: uri
+          example: https://cdn.hrplatform.com/logos/org_001.png
+        registeredDate:
+          type: string
+          format: date-time
+        subscriptionPlan:
+          type: string
+          enum: [Free, Basic, Premium, Enterprise]
+          example: Premium
+        isActive:
+          type: boolean
+          example: true
+        employeeLimit:
+          type: integer
+          example: 200
+        currentEmployeeCount:
+          type: integer
+          example: 45
+        settings:
+          type: object
+          properties:
+            timezone:
+              type: string
+              example: America/Los_Angeles
+            currency:
+              type: string
+              example: USD
+            dateFormat:
+              type: string
+              example: MM/DD/YYYY
+        adminId:
+          type: string
+          example: user_123
+        taxId:
+          type: string
+          example: 12-3456789
+        website:
+          type: string
+          format: uri
+          example: https://techsolutions.com
+
+    CreateOrganizationRequest:
+      type: object
+      required:
+        - name
+        - email
+        - adminName
+        - adminEmail
+        - adminPassword
+      properties:
+        name:
+          type: string
+          example: Tech Solutions Inc.
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        address:
+          type: string
+        industry:
+          type: string
+        subscriptionPlan:
+          type: string
+          enum: [Free, Basic, Premium, Enterprise]
+          default: Free
+        adminName:
+          type: string
+          example: John Doe
+        adminEmail:
+          type: string
+          format: email
+        adminPassword:
+          type: string
+          format: password
+        taxId:
+          type: string
+        website:
+          type: string
+          format: uri
+
+    # Employee Schemas
+    Employee:
+      type: object
+      properties:
+        id:
+          type: string
+          example: emp_001
+        organizationId:
+          type: string
+          example: org_001
+        name:
+          type: string
+          example: Jane Smith
+        email:
+          type: string
+          format: email
+          example: jane.smith@company.com
+        phone:
+          type: string
+          example: +1-555-5678
+        department:
+          type: string
+          example: Engineering
+        position:
+          type: string
+          example: Senior Developer
+        joinDate:
+          type: string
+          format: date
+          example: 2023-01-15
+        salary:
+          type: number
+          format: double
+          example: 85000.00
+        status:
+          type: string
+          enum: [active, inactive, on_leave]
+          example: active
+        address:
+          type: string
+        emergencyContact:
+          type: object
+          properties:
+            name:
+              type: string
+            phone:
+              type: string
+            relationship:
+              type: string
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    # Department Schema
+    Department:
+      type: object
+      properties:
+        id:
+          type: string
+          example: dept_001
+        organizationId:
+          type: string
+          example: org_001
+        name:
+          type: string
+          example: Engineering
+        description:
+          type: string
+        managerId:
+          type: string
+          example: emp_001
+        employeeCount:
+          type: integer
+          example: 15
+        budget:
+          type: number
+          format: double
+        createdAt:
+          type: string
+          format: date-time
+
+    # Leave Request Schema
+    LeaveRequest:
+      type: object
+      properties:
+        id:
+          type: string
+          example: leave_001
+        organizationId:
+          type: string
+        employeeId:
+          type: string
+        employeeName:
+          type: string
+        leaveType:
+          type: string
+          enum: [sick, vacation, personal, unpaid]
+        startDate:
+          type: string
+          format: date
+        endDate:
+          type: string
+          format: date
+        days:
+          type: integer
+        reason:
+          type: string
+        status:
+          type: string
+          enum: [pending, approved, rejected]
+        requestDate:
+          type: string
+          format: date-time
+        reviewedBy:
+          type: string
+        reviewedAt:
+          type: string
+          format: date-time
+        reviewNotes:
+          type: string
+
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+        message:
+          type: string
+        code:
+          type: integer
+        details:
+          type: object
+
+security:
+  - bearerAuth: []
+
+paths:
+  # Authentication Endpoints
+  /auth/login:
+    post:
+      tags:
+        - Authentication
+      summary: User login
+      description: Authenticate user and receive JWT token
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /auth/logout:
+    post:
+      tags:
+        - Authentication
+      summary: User logout
+      description: Invalidate current JWT token
+      responses:
+        '200':
+          description: Logout successful
+        '401':
+          description: Unauthorized
+
+  /auth/refresh:
+    post:
+      tags:
+        - Authentication
+      summary: Refresh JWT token
+      description: Get a new JWT token using refresh token
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+
+  # Organization Endpoints (Super Admin Only)
+  /organizations:
+    get:
+      tags:
+        - Organizations
+      summary: Get all organizations
+      description: Retrieve all organizations (Super Admin only)
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of organizations
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Organization'
+                  total:
+                    type: integer
+                  page:
+                    type: integer
+                  limit:
+                    type: integer
+        '403':
+          description: Forbidden - Super Admin only
+
+    post:
+      tags:
+        - Organizations
+      summary: Create new organization
+      description: Register a new organization with admin account
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateOrganizationRequest'
+      responses:
+        '201':
+          description: Organization created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '400':
+          description: Invalid input
+
+  /organizations/{organizationId}:
+    get:
+      tags:
+        - Organizations
+      summary: Get organization by ID
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+        '404':
+          description: Organization not found
+
+    put:
+      tags:
+        - Organizations
+      summary: Update organization
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Organization'
+      responses:
+        '200':
+          description: Organization updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Organization'
+
+    delete:
+      tags:
+        - Organizations
+      summary: Delete organization
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Organization deleted
+        '403':
+          description: Forbidden
+
+  /organizations/{organizationId}/stats:
+    get:
+      tags:
+        - Organizations
+      summary: Get organization statistics
+      parameters:
+        - name: organizationId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Organization statistics
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  totalEmployees:
+                    type: integer
+                  activeEmployees:
+                    type: integer
+                  departments:
+                    type: integer
+                  pendingLeaves:
+                    type: integer
+                  monthlyRevenue:
+                    type: number
+
+  # Employee Endpoints
+  /employees:
+    get:
+      tags:
+        - Employees
+      summary: Get all employees
+      description: Get employees for authenticated user's organization
+      parameters:
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+        - name: department
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of employees
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  data:
+                    type: array
+                    items:
+                      $ref: '#/components/schemas/Employee'
+                  total:
+                    type: integer
+
+    post:
+      tags:
+        - Employees
+      summary: Create new employee
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Employee'
+      responses:
+        '201':
+          description: Employee created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+
+  /employees/{employeeId}:
+    get:
+      tags:
+        - Employees
+      summary: Get employee by ID
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Employee details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Employee'
+
+    put:
+      tags:
+        - Employees
+      summary: Update employee
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Employee'
+      responses:
+        '200':
+          description: Employee updated
+
+    delete:
+      tags:
+        - Employees
+      summary: Delete employee
+      parameters:
+        - name: employeeId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Employee deleted
+
+  # Leave Request Endpoints
+  /leave-requests:
+    get:
+      tags:
+        - Leave Requests
+      summary: Get leave requests
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, approved, rejected]
+        - name: employeeId
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of leave requests
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/LeaveRequest'
+
+    post:
+      tags:
+        - Leave Requests
+      summary: Create leave request
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LeaveRequest'
+      responses:
+        '201':
+          description: Leave request created
+
+  /leave-requests/{leaveId}/approve:
+    post:
+      tags:
+        - Leave Requests
+      summary: Approve leave request
+      parameters:
+        - name: leaveId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                notes:
+                  type: string
+      responses:
+        '200':
+          description: Leave approved
+
+  /leave-requests/{leaveId}/reject:
+    post:
+      tags:
+        - Leave Requests
+      summary: Reject leave request
+      parameters:
+        - name: leaveId
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - reason
+              properties:
+                reason:
+                  type: string
+      responses:
+        '200':
+          description: Leave rejected
+

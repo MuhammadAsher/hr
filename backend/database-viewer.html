@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Platform - Database Viewer</title>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            padding: 30px;
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .section {
+            margin-bottom: 40px;
+        }
+        .section h2 {
+            color: #2c3e50;
+            border-bottom: 2px solid #3498db;
+            padding-bottom: 10px;
+        }
+        .login-form {
+            background: #ecf0f1;
+            padding: 20px;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .login-form input, .login-form select {
+            margin: 5px;
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+        }
+        .login-form button {
+            background: #3498db;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        .login-form button:hover {
+            background: #2980b9;
+        }
+        .data-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 15px;
+        }
+        .data-table th, .data-table td {
+            border: 1px solid #ddd;
+            padding: 12px;
+            text-align: left;
+        }
+        .data-table th {
+            background-color: #3498db;
+            color: white;
+        }
+        .data-table tr:nth-child(even) {
+            background-color: #f9f9f9;
+        }
+        .status {
+            padding: 20px;
+            margin: 10px 0;
+            border-radius: 4px;
+        }
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .api-test {
+            background: #f8f9fa;
+            padding: 15px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .credentials {
+            background: #fff3cd;
+            padding: 15px;
+            border-radius: 5px;
+            border: 1px solid #ffeaa7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗄️ HR Platform Database Viewer</h1>
+        
+        <div class="section">
+            <h2>🔑 Default Login Credentials</h2>
+            <div class="credentials">
+                <p><strong>Super Admin:</strong> superadmin@hrplatform.com / super123</p>
+                <p><strong>Organization Admin:</strong> admin@hr.com / admin123</p>
+                <p><strong>Employee:</strong> employee@hr.com / employee123</p>
+            </div>
+        </div>
+
+        <div class="section">
+            <h2>🧪 API Testing</h2>
+            <div class="login-form">
+                <h3>Test Login</h3>
+                <input type="email" id="email" placeholder="Email" value="admin@hr.com">
+                <input type="password" id="password" placeholder="Password" value="admin123">
+                <select id="role">
+                    <option value="admin">Admin</option>
+                    <option value="employee">Employee</option>
+                </select>
+                <button onclick="testLogin()">Test Login</button>
+                <button onclick="loadData()">Load Database Data</button>
+            </div>
+            <div id="status"></div>
+        </div>
+
+        <div class="section">
+            <h2>👥 Users</h2>
+            <div id="users-data">Click "Load Database Data" to view users</div>
+        </div>
+
+        <div class="section">
+            <h2>🏢 Organizations</h2>
+            <div id="organizations-data">Click "Load Database Data" to view organizations</div>
+        </div>
+
+        <div class="section">
+            <h2>👨‍💼 Employees</h2>
+            <div id="employees-data">Click "Load Database Data" to view employees</div>
+        </div>
+
+        <div class="section">
+            <h2>🔧 Quick Actions</h2>
+            <div class="api-test">
+                <p><strong>Backend Server:</strong> <span id="server-status">Checking...</span></p>
+                <p><strong>Database File:</strong> backend/database.sqlite</p>
+                <p><strong>View Database:</strong> <code>cd backend && node view-database.js</code></p>
+                <p><strong>Reset Database:</strong> <code>cd backend && rm -f database.sqlite && npm run setup</code></p>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = 'http://localhost:3000/api/v1';
+        let authToken = null;
+
+        // Check server status on load
+        checkServerStatus();
+
+        async function checkServerStatus() {
+            try {
+                const response = await fetch('http://localhost:3000/health');
+                if (response.ok) {
+                    document.getElementById('server-status').innerHTML = '✅ Running on port 3000';
+                } else {
+                    document.getElementById('server-status').innerHTML = '❌ Not responding';
+                }
+            } catch (error) {
+                document.getElementById('server-status').innerHTML = '❌ Not running';
+            }
+        }
+
+        async function testLogin() {
+            const email = document.getElementById('email').value;
+            const password = document.getElementById('password').value;
+            const role = document.getElementById('role').value;
+
+            try {
+                const response = await fetch(`${API_BASE}/auth/login`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ email, password, role })
+                });
+
+                const data = await response.json();
+                
+                if (response.ok) {
+                    authToken = data.token;
+                    showStatus(`✅ Login successful! Welcome ${data.user.name}`, 'success');
+                } else {
+                    showStatus(`❌ Login failed: ${data.message}`, 'error');
+                }
+            } catch (error) {
+                showStatus(`❌ Connection error: ${error.message}`, 'error');
+            }
+        }
+
+        async function loadData() {
+            if (!authToken) {
+                showStatus('❌ Please login first', 'error');
+                return;
+            }
+
+            try {
+                // Load users (admin only)
+                const usersResponse = await fetch(`${API_BASE}/users`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+                
+                // Load employees
+                const employeesResponse = await fetch(`${API_BASE}/employees`, {
+                    headers: { 'Authorization': `Bearer ${authToken}` }
+                });
+
+                if (employeesResponse.ok) {
+                    const employeesData = await employeesResponse.json();
+                    displayEmployees(employeesData.data);
+                }
+
+                showStatus('✅ Data loaded successfully', 'success');
+            } catch (error) {
+                showStatus(`❌ Error loading data: ${error.message}`, 'error');
+            }
+        }
+
+        function displayEmployees(employees) {
+            const container = document.getElementById('employees-data');
+            
+            if (employees.length === 0) {
+                container.innerHTML = '<p>No employees found. Create some employees in your Flutter app!</p>';
+                return;
+            }
+
+            let html = '<table class="data-table"><thead><tr>';
+            html += '<th>Name</th><th>Email</th><th>Department</th><th>Position</th><th>Status</th><th>Join Date</th>';
+            html += '</tr></thead><tbody>';
+
+            employees.forEach(emp => {
+                html += `<tr>
+                    <td>${emp.name}</td>
+                    <td>${emp.email}</td>
+                    <td>${emp.department}</td>
+                    <td>${emp.position}</td>
+                    <td>${emp.status}</td>
+                    <td>${emp.join_date}</td>
+                </tr>`;
+            });
+
+            html += '</tbody></table>';
+            container.innerHTML = html;
+        }
+
+        function showStatus(message, type) {
+            const statusDiv = document.getElementById('status');
+            statusDiv.innerHTML = `<div class="status ${type}">${message}</div>`;
+        }
+    </script>
+</body>
+</html>

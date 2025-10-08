@@ -15,7 +15,12 @@ class AuthProvider with ChangeNotifier {
   bool get isAuthenticated => _currentUser != null;
 
   AuthProvider() {
-    _checkAuthStatus();
+    _initializeAuth();
+  }
+
+  Future<void> _initializeAuth() async {
+    await _authService.initialize();
+    await _checkAuthStatus();
   }
 
   Future<void> _checkAuthStatus() async {
@@ -23,7 +28,7 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
 
     _currentUser = await _authService.getCurrentUser();
-    
+
     _isLoading = false;
     notifyListeners();
   }
@@ -35,7 +40,7 @@ class AuthProvider with ChangeNotifier {
 
     try {
       final user = await _authService.login(email, password, role);
-      
+
       if (user != null) {
         _currentUser = user;
         _isLoading = false;
@@ -67,4 +72,3 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 }
-

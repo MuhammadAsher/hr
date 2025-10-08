@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Management SaaS Platform - API Documentation</title>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.0/swagger-ui.css">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+        
+        .header {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            padding: 2rem;
+            text-align: center;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        
+        .header h1 {
+            margin: 0;
+            font-size: 2.5rem;
+            font-weight: 700;
+        }
+        
+        .header p {
+            margin: 0.5rem 0 0 0;
+            font-size: 1.1rem;
+            opacity: 0.9;
+        }
+        
+        .info-banner {
+            background: #f8f9fa;
+            border-left: 4px solid #667eea;
+            padding: 1.5rem;
+            margin: 2rem auto;
+            max-width: 1200px;
+            border-radius: 4px;
+        }
+        
+        .info-banner h3 {
+            margin-top: 0;
+            color: #667eea;
+        }
+        
+        .quick-links {
+            display: flex;
+            justify-content: center;
+            gap: 1rem;
+            margin: 2rem 0;
+            flex-wrap: wrap;
+        }
+        
+        .quick-link {
+            background: white;
+            border: 2px solid #667eea;
+            color: #667eea;
+            padding: 0.75rem 1.5rem;
+            text-decoration: none;
+            border-radius: 6px;
+            font-weight: 600;
+            transition: all 0.3s;
+        }
+        
+        .quick-link:hover {
+            background: #667eea;
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+        }
+        
+        .swagger-container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 2rem;
+        }
+        
+        .footer {
+            background: #2d3748;
+            color: white;
+            text-align: center;
+            padding: 2rem;
+            margin-top: 4rem;
+        }
+        
+        .badge {
+            display: inline-block;
+            padding: 0.25rem 0.75rem;
+            border-radius: 12px;
+            font-size: 0.875rem;
+            font-weight: 600;
+            margin: 0 0.25rem;
+        }
+        
+        .badge-success {
+            background: #48bb78;
+            color: white;
+        }
+        
+        .badge-info {
+            background: #4299e1;
+            color: white;
+        }
+        
+        .badge-warning {
+            background: #ed8936;
+            color: white;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <h1>🏢 HR Management SaaS Platform</h1>
+        <p>Complete API Documentation for Multi-Tenant HR System</p>
+        <div style="margin-top: 1rem;">
+            <span class="badge badge-success">v1.0.0</span>
+            <span class="badge badge-info">REST API</span>
+            <span class="badge badge-warning">JWT Auth</span>
+        </div>
+    </div>
+
+    <div class="info-banner">
+        <h3>📚 Getting Started</h3>
+        <p><strong>Base URL:</strong> <code>https://api.hrplatform.com/v1</code></p>
+        <p><strong>Authentication:</strong> All endpoints require JWT token in Authorization header: <code>Bearer &lt;token&gt;</code></p>
+        <p><strong>Content-Type:</strong> <code>application/json</code></p>
+        <p><strong>Multi-Tenancy:</strong> All data is automatically scoped to your organization</p>
+    </div>
+
+    <div class="quick-links">
+        <a href="#authentication" class="quick-link">🔐 Authentication</a>
+        <a href="#organizations" class="quick-link">🏢 Organizations</a>
+        <a href="#employees" class="quick-link">👥 Employees</a>
+        <a href="#leave-requests" class="quick-link">📅 Leave Requests</a>
+        <a href="openapi.yaml" class="quick-link" download>📥 Download OpenAPI Spec</a>
+        <a href="postman_collection.json" class="quick-link" download>📮 Postman Collection</a>
+    </div>
+
+    <div class="swagger-container">
+        <div id="swagger-ui"></div>
+    </div>
+
+    <div class="footer">
+        <p><strong>HR Management SaaS Platform API</strong></p>
+        <p>Built with ❤️ for modern HR management</p>
+        <p style="margin-top: 1rem; opacity: 0.8;">
+            Need help? Contact us at <a href="mailto:support@hrplatform.com" style="color: #4299e1;">support@hrplatform.com</a>
+        </p>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.0/swagger-ui-bundle.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/swagger-ui-dist@5.10.0/swagger-ui-standalone-preset.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/js-yaml@4.1.0/dist/js-yaml.min.js"></script>
+    <script>
+        window.onload = async function() {
+            try {
+                // Try to load YAML file
+                const response = await fetch('openapi.yaml');
+
+                if (!response.ok) {
+                    // If fetch fails (local file system), load embedded spec
+                    console.log('Loading embedded OpenAPI spec...');
+                    loadEmbeddedSpec();
+                } else {
+                    // If fetch succeeds (web server), use URL
+                    const ui = SwaggerUIBundle({
+                        url: "openapi.yaml",
+                        dom_id: '#swagger-ui',
+                        deepLinking: true,
+                        presets: [
+                            SwaggerUIBundle.presets.apis,
+                            SwaggerUIStandalonePreset
+                        ],
+                        plugins: [
+                            SwaggerUIBundle.plugins.DownloadUrl
+                        ],
+                        layout: "StandaloneLayout",
+                        defaultModelsExpandDepth: 1,
+                        defaultModelExpandDepth: 1,
+                        docExpansion: "list",
+                        filter: true,
+                        showRequestHeaders: true,
+                        tryItOutEnabled: true
+                    });
+
+                    window.ui = ui;
+                }
+            } catch (error) {
+                console.log('Fetch failed, loading embedded spec...', error);
+                loadEmbeddedSpec();
+            }
+        };
+
+        function loadEmbeddedSpec() {
+            // Embedded OpenAPI spec for local file system access
+            const spec = {
+                "openapi": "3.0.3",
+                "info": {
+                    "title": "HR Management SaaS Platform API",
+                    "description": "Multi-tenant HR Management System API\n\n**Note:** This is a preview. For full documentation, please run a local server:\n```bash\ncd api\npython -m http.server 8000\n```\nThen open: http://localhost:8000",
+                    "version": "1.0.0"
+                },
+                "servers": [
+                    {
+                        "url": "https://api.hrplatform.com/v1",
+                        "description": "Production server"
+                    },
+                    {
+                        "url": "http://localhost:3000/v1",
+                        "description": "Local development"
+                    }
+                ],
+                "tags": [
+                    {"name": "Authentication", "description": "User authentication"},
+                    {"name": "Organizations", "description": "Organization management"},
+                    {"name": "Employees", "description": "Employee management"},
+                    {"name": "Leave Requests", "description": "Leave management"}
+                ],
+                "paths": {
+                    "/auth/login": {
+                        "post": {
+                            "tags": ["Authentication"],
+                            "summary": "User login",
+                            "description": "Authenticate user and receive JWT token",
+                            "requestBody": {
+                                "required": true,
+                                "content": {
+                                    "application/json": {
+                                        "schema": {
+                                            "type": "object",
+                                            "required": ["email", "password", "role"],
+                                            "properties": {
+                                                "email": {"type": "string", "example": "admin@hr.com"},
+                                                "password": {"type": "string", "example": "admin123"},
+                                                "role": {"type": "string", "enum": ["admin", "employee"]}
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            "responses": {
+                                "200": {
+                                    "description": "Login successful",
+                                    "content": {
+                                        "application/json": {
+                                            "schema": {
+                                                "type": "object",
+                                                "properties": {
+                                                    "token": {"type": "string"},
+                                                    "user": {"type": "object"},
+                                                    "expiresIn": {"type": "integer"}
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            };
+
+            const ui = SwaggerUIBundle({
+                spec: spec,
+                dom_id: '#swagger-ui',
+                deepLinking: true,
+                presets: [
+                    SwaggerUIBundle.presets.apis,
+                    SwaggerUIStandalonePreset
+                ],
+                plugins: [
+                    SwaggerUIBundle.plugins.DownloadUrl
+                ],
+                layout: "StandaloneLayout",
+                defaultModelsExpandDepth: 1,
+                defaultModelExpandDepth: 1,
+                docExpansion: "list",
+                filter: true,
+                showRequestHeaders: true,
+                tryItOutEnabled: true
+            });
+
+            window.ui = ui;
+        }
+    </script>
+</body>
+</html>
+
