@@ -1,17 +1,22 @@
 import 'package:flutter/material.dart';
 import '../models/employee.dart';
 import '../services/employee_service.dart';
+import '../services/api_employee_service.dart';
 import 'package:intl/intl.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
   const EmployeeManagementScreen({super.key});
 
   @override
-  State<EmployeeManagementScreen> createState() => _EmployeeManagementScreenState();
+  State<EmployeeManagementScreen> createState() =>
+      _EmployeeManagementScreenState();
 }
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
-  final EmployeeService _employeeService = EmployeeService();
+  final EmployeeService _employeeService =
+      EmployeeService(); // Fallback for mock data
+  final ApiEmployeeService _apiEmployeeService =
+      ApiEmployeeService(); // API service
   List<Employee> _employees = [];
   bool _isLoading = true;
   final TextEditingController _searchController = TextEditingController();
@@ -30,20 +35,49 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   Future<void> _loadEmployees() async {
     setState(() => _isLoading = true);
-    final employees = await _employeeService.getAllEmployees();
-    setState(() {
-      _employees = employees;
-      _isLoading = false;
-    });
+    try {
+      // Try API first
+      final employees = await _apiEmployeeService.getAllEmployees();
+      setState(() {
+        _employees = employees;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('API failed, falling back to mock data: $e');
+      // Fallback to mock data
+      final employees = await _employeeService.getAllEmployees();
+      setState(() {
+        _employees = employees;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _searchEmployees(String query) async {
     setState(() => _isLoading = true);
-    final employees = await _employeeService.searchEmployees(query);
-    setState(() {
-      _employees = employees;
-      _isLoading = false;
-    });
+    try {
+      // For now, just reload all employees and filter locally
+      // TODO: Implement search in API service
+      final employees = await _apiEmployeeService.getAllEmployees();
+      final filteredEmployees = employees.where((emp) {
+        return emp.name.toLowerCase().contains(query.toLowerCase()) ||
+            emp.email.toLowerCase().contains(query.toLowerCase()) ||
+            emp.department.toLowerCase().contains(query.toLowerCase()) ||
+            emp.position.toLowerCase().contains(query.toLowerCase());
+      }).toList();
+      setState(() {
+        _employees = filteredEmployees;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('API search failed, falling back to mock data: $e');
+      // Fallback to mock data
+      final employees = await _employeeService.searchEmployees(query);
+      setState(() {
+        _employees = employees;
+        _isLoading = false;
+      });
+    }
   }
 
   Future<void> _deleteEmployee(String id) async {
@@ -66,12 +100,31 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     );
 
     if (confirmed == true) {
-      await _employeeService.deleteEmployee(id);
-      _loadEmployees();
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Employee deleted successfully')),
-        );
+      try {
+        // Try API first
+        await _apiEmployeeService.deleteEmployee(id);
+        _loadEmployees();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Employee deleted successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        print('API delete failed, falling back to mock data: $e');
+        // Fallback to mock service
+        await _employeeService.deleteEmployee(id);
+        _loadEmployees();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('Employee deleted (using mock data)'),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     }
   }
@@ -124,93 +177,100 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _employees.isEmpty
-                    ? const Center(child: Text('No employees found'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _employees.length,
-                        itemBuilder: (context, index) {
-                          final employee = _employees[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: Theme.of(context).primaryColor,
-                                child: Text(
-                                  employee.name.substring(0, 1).toUpperCase(),
-                                  style: const TextStyle(color: Colors.white),
+                ? const Center(child: Text('No employees found'))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _employees.length,
+                    itemBuilder: (context, index) {
+                      final employee = _employees[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ListTile(
+                          leading: CircleAvatar(
+                            backgroundColor: Theme.of(context).primaryColor,
+                            child: Text(
+                              employee.name.substring(0, 1).toUpperCase(),
+                              style: const TextStyle(color: Colors.white),
+                            ),
+                          ),
+                          title: Text(
+                            employee.name,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(employee.position),
+                              Text(
+                                employee.department,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 12,
                                 ),
                               ),
-                              title: Text(
-                                employee.name,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
+                            ],
+                          ),
+                          trailing: PopupMenuButton(
+                            itemBuilder: (context) => [
+                              const PopupMenuItem(
+                                value: 'view',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.visibility, size: 20),
+                                    SizedBox(width: 8),
+                                    Text('View Details'),
+                                  ],
+                                ),
                               ),
-                              subtitle: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(employee.position),
-                                  Text(
-                                    employee.department,
-                                    style: TextStyle(
-                                      color: Colors.grey[600],
-                                      fontSize: 12,
-                                    ),
-                                  ),
-                                ],
+                              const PopupMenuItem(
+                                value: 'edit',
+                                child: Row(
+                                  children: [
+                                    Icon(Icons.edit, size: 20),
+                                    SizedBox(width: 8),
+                                    Text('Edit'),
+                                  ],
+                                ),
                               ),
-                              trailing: PopupMenuButton(
-                                itemBuilder: (context) => [
-                                  const PopupMenuItem(
-                                    value: 'view',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.visibility, size: 20),
-                                        SizedBox(width: 8),
-                                        Text('View Details'),
-                                      ],
+                              const PopupMenuItem(
+                                value: 'delete',
+                                child: Row(
+                                  children: [
+                                    Icon(
+                                      Icons.delete,
+                                      size: 20,
+                                      color: Colors.red,
                                     ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'edit',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.edit, size: 20),
-                                        SizedBox(width: 8),
-                                        Text('Edit'),
-                                      ],
+                                    SizedBox(width: 8),
+                                    Text(
+                                      'Delete',
+                                      style: TextStyle(color: Colors.red),
                                     ),
-                                  ),
-                                  const PopupMenuItem(
-                                    value: 'delete',
-                                    child: Row(
-                                      children: [
-                                        Icon(Icons.delete, size: 20, color: Colors.red),
-                                        SizedBox(width: 8),
-                                        Text('Delete', style: TextStyle(color: Colors.red)),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-                                onSelected: (value) {
-                                  if (value == 'view') {
-                                    _showEmployeeDetails(employee);
-                                  } else if (value == 'edit') {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (context) => AddEditEmployeeScreen(
-                                          employee: employee,
-                                        ),
-                                      ),
-                                    ).then((_) => _loadEmployees());
-                                  } else if (value == 'delete') {
-                                    _deleteEmployee(employee.id);
-                                  }
-                                },
+                                  ],
+                                ),
                               ),
-                            ),
-                          );
-                        },
-                      ),
+                            ],
+                            onSelected: (value) {
+                              if (value == 'view') {
+                                _showEmployeeDetails(employee);
+                              } else if (value == 'edit') {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (context) => AddEditEmployeeScreen(
+                                      employee: employee,
+                                    ),
+                                  ),
+                                ).then((_) => _loadEmployees());
+                              } else if (value == 'delete') {
+                                _deleteEmployee(employee.id);
+                              }
+                            },
+                          ),
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -231,8 +291,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
               _buildDetailRow('Phone', employee.phone),
               _buildDetailRow('Department', employee.department),
               _buildDetailRow('Position', employee.position),
-              _buildDetailRow('Join Date', DateFormat('MMM dd, yyyy').format(employee.joinDate)),
-              _buildDetailRow('Salary', '\$${employee.salary.toStringAsFixed(2)}'),
+              _buildDetailRow(
+                'Join Date',
+                DateFormat('MMM dd, yyyy').format(employee.joinDate),
+              ),
+              _buildDetailRow(
+                'Salary',
+                '\$${employee.salary.toStringAsFixed(2)}',
+              ),
               _buildDetailRow('Status', employee.status),
             ],
           ),
@@ -283,7 +349,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
   final _phoneController = TextEditingController();
   final _positionController = TextEditingController();
   final _salaryController = TextEditingController();
-  
+
   String _selectedDepartment = 'Engineering';
   final List<String> _departments = [
     'Engineering',
@@ -319,36 +385,90 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
 
   Future<void> _saveEmployee() async {
     if (_formKey.currentState!.validate()) {
-      final employeeService = EmployeeService();
-      final employee = Employee(
-        id: widget.employee?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
-        name: _nameController.text,
-        email: _emailController.text,
-        phone: _phoneController.text,
-        department: _selectedDepartment,
-        position: _positionController.text,
-        salary: double.parse(_salaryController.text),
-        joinDate: widget.employee?.joinDate ?? DateTime.now(),
-        status: widget.employee?.status ?? 'Active',
-      );
+      try {
+        final apiEmployeeService = ApiEmployeeService();
 
-      if (widget.employee == null) {
-        await employeeService.addEmployee(employee);
-      } else {
-        await employeeService.updateEmployee(employee);
-      }
+        if (widget.employee == null) {
+          // Create new employee via API
+          print('🚀 Creating new employee via API...');
+          final newEmployee = await apiEmployeeService.createEmployee(
+            name: _nameController.text,
+            email: _emailController.text,
+            phone: _phoneController.text,
+            department: _selectedDepartment,
+            position: _positionController.text,
+            salary: double.parse(_salaryController.text),
+            joinDate: DateTime.now(),
+            status: 'Active',
+          );
+          print('✅ Employee created successfully: ${newEmployee.id}');
+        } else {
+          // Update existing employee via API
+          print('🚀 Updating employee via API...');
+          final updates = {
+            'name': _nameController.text,
+            'email': _emailController.text,
+            'phone': _phoneController.text,
+            'department': _selectedDepartment,
+            'position': _positionController.text,
+            'salary': double.parse(_salaryController.text),
+            'status': widget.employee!.status.toLowerCase(),
+          };
+          final updatedEmployee = await apiEmployeeService.updateEmployee(
+            widget.employee!.id,
+            updates,
+          );
+          print('✅ Employee updated successfully: ${updatedEmployee.id}');
+        }
 
-      if (mounted) {
-        Navigator.pop(context);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(
-              widget.employee == null
-                  ? 'Employee added successfully'
-                  : 'Employee updated successfully',
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                widget.employee == null
+                    ? 'Employee added successfully'
+                    : 'Employee updated successfully',
+              ),
+              backgroundColor: Colors.green,
             ),
-          ),
+          );
+        }
+      } catch (e) {
+        print('❌ API call failed: $e');
+        // Fallback to mock service for development
+        final employeeService = EmployeeService();
+        final employee = Employee(
+          id:
+              widget.employee?.id ??
+              DateTime.now().millisecondsSinceEpoch.toString(),
+          name: _nameController.text,
+          email: _emailController.text,
+          phone: _phoneController.text,
+          department: _selectedDepartment,
+          position: _positionController.text,
+          salary: double.parse(_salaryController.text),
+          joinDate: widget.employee?.joinDate ?? DateTime.now(),
+          status: widget.employee?.status ?? 'Active',
         );
+
+        if (widget.employee == null) {
+          await employeeService.addEmployee(employee);
+        } else {
+          await employeeService.updateEmployee(employee);
+        }
+
+        if (mounted) {
+          Navigator.pop(context);
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(
+                '${widget.employee == null ? 'Employee added' : 'Employee updated'} (using mock data)',
+              ),
+              backgroundColor: Colors.orange,
+            ),
+          );
+        }
       }
     }
   }
@@ -445,7 +565,9 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
               style: ElevatedButton.styleFrom(
                 padding: const EdgeInsets.symmetric(vertical: 16),
               ),
-              child: Text(widget.employee == null ? 'Add Employee' : 'Update Employee'),
+              child: Text(
+                widget.employee == null ? 'Add Employee' : 'Update Employee',
+              ),
             ),
           ],
         ),
@@ -453,4 +575,3 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
     );
   }
 }
-

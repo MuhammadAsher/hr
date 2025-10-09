@@ -1,11 +1,29 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'error_service.dart';
 
 class ApiClient {
-  static const String _baseUrl = 'http://localhost:3000/api/v1';
+  // Dynamic base URL based on platform
+  static String get _baseUrl {
+    if (kIsWeb) {
+      // Web development
+      return 'http://localhost:3000/api/v1';
+    } else if (Platform.isAndroid) {
+      // Android emulator - use 10.0.2.2 to access host machine
+      return 'http://10.0.2.2:3000/api/v1';
+    } else if (Platform.isIOS) {
+      // iOS simulator - localhost works
+      return 'http://localhost:3000/api/v1';
+    } else {
+      // Default fallback
+      return 'http://localhost:3000/api/v1';
+    }
+  }
+
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'refresh_token';
 
@@ -65,15 +83,18 @@ class ApiClient {
       final data = json.decode(response.body);
 
       if (statusCode >= 200 && statusCode < 300) {
+        // Success response - no error alerts needed
+        print('✅ API Success: $statusCode');
         return ApiResponse.success(data);
       } else {
-        // Show error alert for failed API calls (except 401 which is handled separately)
-        if (statusCode != 401) {
-          ErrorService.handleApiError(
-            errorResponse: data,
-            useSnackbar: true, // Use snackbar for less intrusive errors
-          );
-        }
+        // Error response - only show alerts for actual errors, not for expected API responses
+        print(
+          '❌ API Error: $statusCode - ${data['message'] ?? 'Unknown error'}',
+        );
+
+        // Don't show automatic error alerts - let the calling services decide
+        // This prevents premature error displays when the operation might still succeed
+        // Services can check response.isSuccess and handle errors appropriately
 
         return ApiResponse.error(
           statusCode: statusCode,
@@ -83,6 +104,7 @@ class ApiClient {
         );
       }
     } catch (e) {
+      print('❌ JSON Parse Error: $e');
       return ApiResponse.error(
         statusCode: statusCode,
         message: 'Failed to parse response',
@@ -140,19 +162,24 @@ class ApiClient {
       final headers = _getHeaders(includeAuth: requireAuth);
       final bodyJson = body != null ? json.encode(body) : null;
 
-      // Make request based on method
+      // Make request based on method with timeout
+      const timeout = Duration(seconds: 30);
       switch (method.toUpperCase()) {
         case 'GET':
-          response = await http.get(uri, headers: headers);
+          response = await http.get(uri, headers: headers).timeout(timeout);
           break;
         case 'POST':
-          response = await http.post(uri, headers: headers, body: bodyJson);
+          response = await http
+              .post(uri, headers: headers, body: bodyJson)
+              .timeout(timeout);
           break;
         case 'PUT':
-          response = await http.put(uri, headers: headers, body: bodyJson);
+          response = await http
+              .put(uri, headers: headers, body: bodyJson)
+              .timeout(timeout);
           break;
         case 'DELETE':
-          response = await http.delete(uri, headers: headers);
+          response = await http.delete(uri, headers: headers).timeout(timeout);
           break;
         default:
           throw Exception('Unsupported HTTP method: $method');
@@ -195,33 +222,54 @@ class ApiClient {
       );
 
       return _handleResponse(response);
-    } on SocketException {
-      ErrorService.showNetworkError(useSnackbar: true);
+    } on SocketException catch (e) {
+      print('❌ Socket Exception: $e');
+      // Don't show automatic network error - let calling service handle it
       return ApiResponse.error(
         statusCode: 0,
-        message: 'No internet connection',
+        message: 'Network connection failed',
         error: 'Network Error',
       );
-    } on HttpException {
-      ErrorService.showErrorSnackbar(
-        message: 'HTTP error occurred',
-        error: 'HTTP Error',
-      );
+    } on HttpException catch (e) {
+      print('❌ HTTP Exception: $e');
+      // Don't show error alert for HTTP exceptions, let the response handler deal with it
       return ApiResponse.error(
         statusCode: 0,
-        message: 'HTTP error occurred',
+        message: 'HTTP error: ${e.message}',
         error: 'HTTP Error',
       );
-    } catch (e) {
-      ErrorService.showErrorSnackbar(
-        message: 'Unexpected error occurred',
-        error: 'Unknown Error',
+    } on TimeoutException catch (e) {
+      print('❌ Timeout Exception: $e');
+      // Don't show automatic timeout error - let calling service handle it
+      return ApiResponse.error(
+        statusCode: 0,
+        message: 'Request timed out',
+        error: 'Timeout Error',
       );
+    } catch (e) {
+      print('❌ Unexpected Error: $e');
+      // Don't show automatic error alerts - let calling service handle it
       return ApiResponse.error(
         statusCode: 0,
         message: 'Unexpected error: $e',
         error: 'Unknown Error',
       );
+    }
+  }
+
+  // Test connectivity to the backend server
+  Future<bool> testConnectivity() async {
+    try {
+      print('🔍 Testing connectivity to: $_baseUrl');
+      final response = await http
+          .get(Uri.parse(_baseUrl.replaceAll('/api/v1', '/health')))
+          .timeout(const Duration(seconds: 10));
+
+      print('🔍 Connectivity test response: ${response.statusCode}');
+      return response.statusCode == 200;
+    } catch (e) {
+      print('🔍 Connectivity test failed: $e');
+      return false;
     }
   }
 

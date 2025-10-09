@@ -3,6 +3,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/user.dart';
 import '../models/user_role.dart';
 import 'api_client.dart';
+import 'error_service.dart';
 
 class AuthService {
   static const String _userKey = 'current_user';
@@ -63,42 +64,62 @@ class AuthService {
   };
 
   Future<User?> login(String email, String password, UserRole role) async {
-    try {
-      // Try API login first
-      final response = await _apiClient.login(email, password, role.name);
+    // Test connectivity first for debugging
+    print('🔍 Testing backend connectivity...');
+    final isConnected = await _apiClient.testConnectivity();
+    print(
+      '🔍 Backend connectivity: ${isConnected ? "✅ Connected" : "❌ Failed"}',
+    );
 
-      if (response.isSuccess) {
-        final responseData = response.data['data'];
-        final userData = responseData['user'];
-        final token = responseData['token'];
-        final refreshToken = responseData['refreshToken'];
+    // Try API login first
+    final response = await _apiClient.login(email, password, role.name);
 
-        // Store tokens
-        await _apiClient.setTokens(token, refreshToken);
+    if (response.isSuccess) {
+      final responseData = response.data['data'];
+      final userData = responseData['user'];
+      final token = responseData['token'];
+      final refreshToken = responseData['refreshToken'];
 
-        // Create user object
-        final user = User(
-          id: userData['id'],
-          email: userData['email'],
-          name: userData['name'],
-          role: UserRole.values.firstWhere(
-            (e) => e.name == userData['role'],
-            orElse: () => UserRole.employee,
-          ),
-          organizationId: userData['organizationId'] ?? '',
-          isSuperAdmin: userData['isSuperAdmin'] ?? false,
+      // Store tokens
+      await _apiClient.setTokens(token, refreshToken);
+
+      // Create user object
+      final user = User(
+        id: userData['id'],
+        email: userData['email'],
+        name: userData['name'],
+        role: UserRole.values.firstWhere(
+          (e) => e.name == userData['role'],
+          orElse: () => UserRole.employee,
+        ),
+        organizationId: userData['organizationId'] ?? '',
+        isSuperAdmin: userData['isSuperAdmin'] ?? false,
+      );
+
+      // Save user to local storage
+      await _saveUser(user);
+      return user;
+    } else {
+      // API login failed - check if it's a network error or authentication error
+      if (response.statusCode == 0) {
+        // Network error - show appropriate message and try mock login
+        print('Network error during login, falling back to mock login');
+        return _mockLogin(email, password, role);
+      } else if (response.statusCode == 401) {
+        // Authentication failed - show error and don't fallback
+        ErrorService.showErrorSnackbar(
+          message: response.message ?? 'Invalid credentials',
+          error: 'Login Failed',
         );
-
-        // Save user to local storage
-        await _saveUser(user);
-        return user;
+        return null;
+      } else {
+        // Other API error - show error and try mock login
+        print(
+          'API login failed (${response.statusCode}), falling back to mock: ${response.message}',
+        );
+        return _mockLogin(email, password, role);
       }
-    } catch (e) {
-      print('API login failed, falling back to mock: $e');
     }
-
-    // Fallback to mock login for development
-    return _mockLogin(email, password, role);
   }
 
   // Mock login fallback
