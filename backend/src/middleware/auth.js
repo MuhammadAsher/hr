@@ -8,11 +8,7 @@ const authenticateToken = async (req, res, next) => {
     const token = authHeader && authHeader.split(' ')[1]; // Bearer TOKEN
 
     if (!token) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Access token is required',
-        code: 401,
-      });
+      return res.unauthorized('Access token is required');
     }
 
     // Verify token
@@ -30,20 +26,12 @@ const authenticateToken = async (req, res, next) => {
     });
 
     if (!user || !user.is_active) {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'User not found or inactive',
-        code: 401,
-      });
+      return res.unauthorized('User not found or inactive');
     }
 
     // Check if organization is active (except for super admin)
     if (!user.is_super_admin && user.organization && !user.organization.is_active) {
-      return res.status(403).json({
-        error: 'Forbidden',
-        message: 'Organization is inactive',
-        code: 403,
-      });
+      return res.forbidden('Organization is inactive');
     }
 
     // Attach user to request
@@ -51,25 +39,13 @@ const authenticateToken = async (req, res, next) => {
     next();
   } catch (error) {
     if (error.name === 'JsonWebTokenError') {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Invalid token',
-        code: 401,
-      });
+      return res.unauthorized('Invalid token');
     } else if (error.name === 'TokenExpiredError') {
-      return res.status(401).json({
-        error: 'Unauthorized',
-        message: 'Token expired',
-        code: 401,
-      });
+      return res.unauthorized('Token expired');
     }
 
     console.error('Auth middleware error:', error);
-    return res.status(500).json({
-      error: 'Internal Server Error',
-      message: 'Authentication failed',
-      code: 500,
-    });
+    return res.error('Authentication failed', 500);
   }
 };
 

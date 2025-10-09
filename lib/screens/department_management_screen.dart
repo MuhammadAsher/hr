@@ -91,7 +91,7 @@ class _DepartmentManagementScreenState
       builder: (context) => _DepartmentFormDialog(
         department: department,
         onSave: (updatedDepartment) async {
-          final success = await _departmentService.updateDepartment(
+          final success = await _departmentService.updateDepartmentLegacy(
             updatedDepartment,
           );
           if (success) {

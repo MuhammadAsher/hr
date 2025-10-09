@@ -68,9 +68,10 @@ class AuthService {
       final response = await _apiClient.login(email, password, role.name);
 
       if (response.isSuccess) {
-        final userData = response.data['user'];
-        final token = response.data['token'];
-        final refreshToken = response.data['refreshToken'];
+        final responseData = response.data['data'];
+        final userData = responseData['user'];
+        final token = responseData['token'];
+        final refreshToken = responseData['refreshToken'];
 
         // Store tokens
         await _apiClient.setTokens(token, refreshToken);

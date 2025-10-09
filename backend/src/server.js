@@ -4,6 +4,7 @@ const helmet = require('helmet');
 const morgan = require('morgan');
 const compression = require('compression');
 const rateLimit = require('express-rate-limit');
+const responseFormatter = require('./middleware/response');
 require('dotenv').config();
 
 const { sequelize } = require('./database/connection');
@@ -32,11 +33,13 @@ const limiter = rateLimit({
 });
 app.use('/api/', limiter);
 
-// CORS configuration
+// CORS configuration - Allow all origins for development
 const corsOptions = {
-  origin: process.env.ALLOWED_ORIGINS ? process.env.ALLOWED_ORIGINS.split(',') : ['http://localhost:3000'],
+  origin: true, // Allow all origins in development
   credentials: true,
   optionsSuccessStatus: 200,
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization', 'X-Requested-With'],
 };
 app.use(cors(corsOptions));
 
@@ -44,19 +47,63 @@ app.use(cors(corsOptions));
 app.use(express.json({ limit: '10mb' }));
 app.use(express.urlencoded({ extended: true, limit: '10mb' }));
 
+// Response formatting middleware
+app.use(responseFormatter);
+
+// Swagger Documentation
+const { serve, setup } = require('./config/swagger');
+app.use('/api-docs', serve, setup);
+
+// Serve static files from public directory
+app.use(express.static('public'));
+
 // Logging middleware
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined'));
 }
 
+/**
+ * @swagger
+ * /health:
+ *   get:
+ *     summary: Health check
+ *     description: Check if the server is running and healthy
+ *     tags: [System]
+ *     security: []
+ *     responses:
+ *       200:
+ *         description: Server is healthy
+ *         content:
+ *           application/json:
+ *             schema:
+ *               allOf:
+ *                 - $ref: '#/components/schemas/ApiResponse'
+ *                 - type: object
+ *                   properties:
+ *                     data:
+ *                       type: object
+ *                       properties:
+ *                         timestamp:
+ *                           type: string
+ *                           format: date-time
+ *                           description: Current server timestamp
+ *                           example: "2024-01-01T00:00:00.000Z"
+ *                         uptime:
+ *                           type: number
+ *                           description: Server uptime in seconds
+ *                           example: 123.456
+ *                         environment:
+ *                           type: string
+ *                           description: Current environment
+ *                           example: "development"
+ */
 // Health check endpoint
 app.get('/health', (req, res) => {
-  res.status(200).json({
-    status: 'OK',
+  res.success({
     timestamp: new Date().toISOString(),
     uptime: process.uptime(),
     environment: process.env.NODE_ENV,
-  });
+  }, 'Server is healthy');
 });
 
 // API routes
@@ -125,6 +172,7 @@ async function startServer() {
       console.log(`🚀 HR Platform API server running on port ${PORT}`);
       console.log(`📚 Environment: ${process.env.NODE_ENV}`);
       console.log(`🔗 Health check: http://localhost:${PORT}/health`);
+      console.log(`📖 API Documentation: http://localhost:${PORT}/api-docs`);
     });
   } catch (error) {
     console.error('❌ Unable to start server:', error);

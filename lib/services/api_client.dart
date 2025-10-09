@@ -2,12 +2,13 @@ import 'dart:convert';
 import 'dart:io';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
+import 'error_service.dart';
 
 class ApiClient {
   static const String _baseUrl = 'http://localhost:3000/api/v1';
   static const String _tokenKey = 'auth_token';
   static const String _refreshTokenKey = 'refresh_token';
-  
+
   static final ApiClient _instance = ApiClient._internal();
   factory ApiClient() => _instance;
   ApiClient._internal();
@@ -26,7 +27,7 @@ class ApiClient {
   Future<void> setTokens(String authToken, String refreshToken) async {
     _authToken = authToken;
     _refreshToken = refreshToken;
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, authToken);
     await prefs.setString(_refreshTokenKey, refreshToken);
@@ -36,7 +37,7 @@ class ApiClient {
   Future<void> clearTokens() async {
     _authToken = null;
     _refreshToken = null;
-    
+
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshTokenKey);
@@ -59,13 +60,21 @@ class ApiClient {
   // Handle API response
   ApiResponse _handleResponse(http.Response response) {
     final statusCode = response.statusCode;
-    
+
     try {
       final data = json.decode(response.body);
-      
+
       if (statusCode >= 200 && statusCode < 300) {
         return ApiResponse.success(data);
       } else {
+        // Show error alert for failed API calls (except 401 which is handled separately)
+        if (statusCode != 401) {
+          ErrorService.handleApiError(
+            errorResponse: data,
+            useSnackbar: true, // Use snackbar for less intrusive errors
+          );
+        }
+
         return ApiResponse.error(
           statusCode: statusCode,
           message: data['message'] ?? 'Unknown error occurred',
@@ -120,6 +129,12 @@ class ApiClient {
         uri = uri.replace(queryParameters: queryParams);
       }
 
+      // Debug logging
+      print('🌐 API Request: $method $uri');
+      if (body != null) {
+        print('📤 Request Body: $body');
+      }
+
       // Prepare request
       late http.Response response;
       final headers = _getHeaders(includeAuth: requireAuth);
@@ -154,10 +169,18 @@ class ApiClient {
               response = await http.get(uri, headers: newHeaders);
               break;
             case 'POST':
-              response = await http.post(uri, headers: newHeaders, body: bodyJson);
+              response = await http.post(
+                uri,
+                headers: newHeaders,
+                body: bodyJson,
+              );
               break;
             case 'PUT':
-              response = await http.put(uri, headers: newHeaders, body: bodyJson);
+              response = await http.put(
+                uri,
+                headers: newHeaders,
+                body: bodyJson,
+              );
               break;
             case 'DELETE':
               response = await http.delete(uri, headers: newHeaders);
@@ -166,20 +189,34 @@ class ApiClient {
         }
       }
 
+      // Debug logging
+      print(
+        '📥 API Response: ${response.statusCode} ${response.body.substring(0, 200)}...',
+      );
+
       return _handleResponse(response);
     } on SocketException {
+      ErrorService.showNetworkError(useSnackbar: true);
       return ApiResponse.error(
         statusCode: 0,
         message: 'No internet connection',
         error: 'Network Error',
       );
     } on HttpException {
+      ErrorService.showErrorSnackbar(
+        message: 'HTTP error occurred',
+        error: 'HTTP Error',
+      );
       return ApiResponse.error(
         statusCode: 0,
         message: 'HTTP error occurred',
         error: 'HTTP Error',
       );
     } catch (e) {
+      ErrorService.showErrorSnackbar(
+        message: 'Unexpected error occurred',
+        error: 'Unknown Error',
+      );
       return ApiResponse.error(
         statusCode: 0,
         message: 'Unexpected error: $e',
@@ -210,11 +247,7 @@ class ApiClient {
     return _makeRequest(
       'POST',
       '/auth/login',
-      body: {
-        'email': email,
-        'password': password,
-        'role': role,
-      },
+      body: {'email': email, 'password': password, 'role': role},
       requireAuth: false,
     );
   }
@@ -253,11 +286,7 @@ class ApiResponse {
   });
 
   factory ApiResponse.success(dynamic data) {
-    return ApiResponse._(
-      isSuccess: true,
-      statusCode: 200,
-      data: data,
-    );
+    return ApiResponse._(isSuccess: true, statusCode: 200, data: data);
   }
 
   factory ApiResponse.error({

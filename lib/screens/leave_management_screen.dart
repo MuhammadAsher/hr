@@ -40,32 +40,36 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
 
   Future<void> _approveLeave(String id) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await _leaveService.approveLeaveRequest(id, authProvider.currentUser!.name);
+    await _leaveService.approveLeaveRequest(
+      id,
+      comments: authProvider.currentUser!.name,
+    );
     _loadLeaveRequests();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Leave request approved')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Leave request approved')));
     }
   }
 
   Future<void> _rejectLeave(String id) async {
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
-    await _leaveService.rejectLeaveRequest(id, authProvider.currentUser!.name);
+    await _leaveService.rejectLeaveRequest(
+      id,
+      reason: authProvider.currentUser!.name,
+    );
     _loadLeaveRequests();
     if (mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Leave request rejected')),
-      );
+      ScaffoldMessenger.of(
+        context,
+      ).showSnackBar(const SnackBar(content: Text('Leave request rejected')));
     }
   }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(
-        title: const Text('Leave Requests'),
-      ),
+      appBar: AppBar(title: const Text('Leave Requests')),
       body: Column(
         children: [
           Padding(
@@ -73,7 +77,9 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
             child: SingleChildScrollView(
               scrollDirection: Axis.horizontal,
               child: Row(
-                children: ['All', 'Pending', 'Approved', 'Rejected'].map((filter) {
+                children: ['All', 'Pending', 'Approved', 'Rejected'].map((
+                  filter,
+                ) {
                   return Padding(
                     padding: const EdgeInsets.only(right: 8),
                     child: FilterChip(
@@ -92,90 +98,109 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : _filteredRequests.isEmpty
-                    ? const Center(child: Text('No leave requests found'))
-                    : ListView.builder(
-                        padding: const EdgeInsets.symmetric(horizontal: 16),
-                        itemCount: _filteredRequests.length,
-                        itemBuilder: (context, index) {
-                          final request = _filteredRequests[index];
-                          return Card(
-                            margin: const EdgeInsets.only(bottom: 12),
-                            child: ExpansionTile(
-                              leading: CircleAvatar(
-                                backgroundColor: _getStatusColor(request.status),
-                                child: Icon(
-                                  _getStatusIcon(request.status),
-                                  color: Colors.white,
-                                  size: 20,
-                                ),
-                              ),
-                              title: Text(
-                                request.employeeName,
-                                style: const TextStyle(fontWeight: FontWeight.bold),
-                              ),
-                              subtitle: Text(
-                                '${request.leaveType} - ${request.daysCount} day(s)',
-                              ),
-                              trailing: Chip(
-                                label: Text(
-                                  request.status,
-                                  style: const TextStyle(fontSize: 12),
-                                ),
-                                backgroundColor: _getStatusColor(request.status).withOpacity(0.2),
-                              ),
-                              children: [
-                                Padding(
-                                  padding: const EdgeInsets.all(16.0),
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      _buildDetailRow('Start Date',
-                                          DateFormat('MMM dd, yyyy').format(request.startDate)),
-                                      _buildDetailRow('End Date',
-                                          DateFormat('MMM dd, yyyy').format(request.endDate)),
-                                      _buildDetailRow('Reason', request.reason),
-                                      _buildDetailRow('Request Date',
-                                          DateFormat('MMM dd, yyyy').format(request.requestDate)),
-                                      if (request.approvedBy != null)
-                                        _buildDetailRow('Approved By', request.approvedBy!),
-                                      if (request.status == 'Pending') ...[
-                                        const SizedBox(height: 16),
-                                        Row(
-                                          children: [
-                                            Expanded(
-                                              child: ElevatedButton.icon(
-                                                onPressed: () => _approveLeave(request.id),
-                                                icon: const Icon(Icons.check),
-                                                label: const Text('Approve'),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.green,
-                                                  foregroundColor: Colors.white,
-                                                ),
-                                              ),
+                ? const Center(child: Text('No leave requests found'))
+                : ListView.builder(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: _filteredRequests.length,
+                    itemBuilder: (context, index) {
+                      final request = _filteredRequests[index];
+                      return Card(
+                        margin: const EdgeInsets.only(bottom: 12),
+                        child: ExpansionTile(
+                          leading: CircleAvatar(
+                            backgroundColor: _getStatusColor(request.status),
+                            child: Icon(
+                              _getStatusIcon(request.status),
+                              color: Colors.white,
+                              size: 20,
+                            ),
+                          ),
+                          title: Text(
+                            request.employeeName,
+                            style: const TextStyle(fontWeight: FontWeight.bold),
+                          ),
+                          subtitle: Text(
+                            '${request.leaveType} - ${request.daysCount} day(s)',
+                          ),
+                          trailing: Chip(
+                            label: Text(
+                              request.status,
+                              style: const TextStyle(fontSize: 12),
+                            ),
+                            backgroundColor: _getStatusColor(
+                              request.status,
+                            ).withOpacity(0.2),
+                          ),
+                          children: [
+                            Padding(
+                              padding: const EdgeInsets.all(16.0),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  _buildDetailRow(
+                                    'Start Date',
+                                    DateFormat(
+                                      'MMM dd, yyyy',
+                                    ).format(request.startDate),
+                                  ),
+                                  _buildDetailRow(
+                                    'End Date',
+                                    DateFormat(
+                                      'MMM dd, yyyy',
+                                    ).format(request.endDate),
+                                  ),
+                                  _buildDetailRow('Reason', request.reason),
+                                  _buildDetailRow(
+                                    'Request Date',
+                                    DateFormat(
+                                      'MMM dd, yyyy',
+                                    ).format(request.requestDate),
+                                  ),
+                                  if (request.approvedBy != null)
+                                    _buildDetailRow(
+                                      'Approved By',
+                                      request.approvedBy!,
+                                    ),
+                                  if (request.status == 'Pending') ...[
+                                    const SizedBox(height: 16),
+                                    Row(
+                                      children: [
+                                        Expanded(
+                                          child: ElevatedButton.icon(
+                                            onPressed: () =>
+                                                _approveLeave(request.id),
+                                            icon: const Icon(Icons.check),
+                                            label: const Text('Approve'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.green,
+                                              foregroundColor: Colors.white,
                                             ),
-                                            const SizedBox(width: 12),
-                                            Expanded(
-                                              child: ElevatedButton.icon(
-                                                onPressed: () => _rejectLeave(request.id),
-                                                icon: const Icon(Icons.close),
-                                                label: const Text('Reject'),
-                                                style: ElevatedButton.styleFrom(
-                                                  backgroundColor: Colors.red,
-                                                  foregroundColor: Colors.white,
-                                                ),
-                                              ),
+                                          ),
+                                        ),
+                                        const SizedBox(width: 12),
+                                        Expanded(
+                                          child: ElevatedButton.icon(
+                                            onPressed: () =>
+                                                _rejectLeave(request.id),
+                                            icon: const Icon(Icons.close),
+                                            label: const Text('Reject'),
+                                            style: ElevatedButton.styleFrom(
+                                              backgroundColor: Colors.red,
+                                              foregroundColor: Colors.white,
                                             ),
-                                          ],
+                                          ),
                                         ),
                                       ],
-                                    ],
-                                  ),
-                                ),
-                              ],
+                                    ),
+                                  ],
+                                ],
+                              ),
                             ),
-                          );
-                        },
-                      ),
+                          ],
+                        ),
+                      );
+                    },
+                  ),
           ),
         ],
       ),
@@ -227,4 +252,3 @@ class _LeaveManagementScreenState extends State<LeaveManagementScreen> {
     }
   }
 }
-

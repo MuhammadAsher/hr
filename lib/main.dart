@@ -7,6 +7,7 @@ import 'screens/employee_dashboard.dart';
 import 'screens/super_admin_dashboard.dart';
 import 'models/user_role.dart';
 import 'services/api_client.dart';
+import 'services/error_service.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
@@ -22,11 +23,16 @@ class MyApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Create global navigator key for error service
+    final navigatorKey = GlobalKey<NavigatorState>();
+    ErrorService.navigatorKey = navigatorKey;
+
     return ChangeNotifierProvider(
       create: (_) => AuthProvider(),
       child: MaterialApp(
         title: 'HR Management',
         debugShowCheckedModeBanner: false,
+        navigatorKey: navigatorKey,
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,
