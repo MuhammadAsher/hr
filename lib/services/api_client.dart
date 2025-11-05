@@ -393,6 +393,42 @@ class ApiClient {
     );
   }
 
+  Future<ApiResponse> register(
+    String organizationName,
+    String organizationEmail,
+    String? organizationPhone,
+    String? organizationAddress,
+    String industry,
+    String adminName,
+    String adminEmail,
+    String adminPassword,
+    String confirmPassword,
+  ) {
+    final body = <String, dynamic>{
+      'organizationName': organizationName,
+      'organizationEmail': organizationEmail,
+      'industry': industry,
+      'adminName': adminName,
+      'adminEmail': adminEmail,
+      'adminPassword': adminPassword,
+      'confirmPassword': confirmPassword,
+    };
+
+    if (organizationPhone != null && organizationPhone.isNotEmpty) {
+      body['organizationPhone'] = organizationPhone;
+    }
+    if (organizationAddress != null && organizationAddress.isNotEmpty) {
+      body['organizationAddress'] = organizationAddress;
+    }
+
+    return _makeRequest(
+      'POST',
+      '/auth/register',
+      body: body,
+      requireAuth: false,
+    );
+  }
+
   Future<ApiResponse> logout() {
     return _makeRequest('POST', '/auth/logout');
   }

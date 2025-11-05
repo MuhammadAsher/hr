@@ -189,4 +189,84 @@ class AuthService {
     final user = await getCurrentUser();
     return user != null;
   }
+
+  // Register new organization with admin account
+  Future<User?> registerOrganization({
+    required String organizationName,
+    required String organizationEmail,
+    String? organizationPhone,
+    String? organizationAddress,
+    required String industry,
+    required String adminName,
+    required String adminEmail,
+    required String adminPassword,
+    required String confirmPassword,
+  }) async {
+    try {
+      final body = {
+        'organizationName': organizationName,
+        'organizationEmail': organizationEmail,
+        'industry': industry,
+        'adminName': adminName,
+        'adminEmail': adminEmail,
+        'adminPassword': adminPassword,
+        'confirmPassword': confirmPassword,
+      };
+
+      if (organizationPhone != null && organizationPhone.isNotEmpty) {
+        body['organizationPhone'] = organizationPhone;
+      }
+      if (organizationAddress != null && organizationAddress.isNotEmpty) {
+        body['organizationAddress'] = organizationAddress;
+      }
+
+      // Register endpoint doesn't require auth
+      final response = await _apiClient.register(
+        organizationName,
+        organizationEmail,
+        organizationPhone,
+        organizationAddress,
+        industry,
+        adminName,
+        adminEmail,
+        adminPassword,
+        confirmPassword,
+      );
+
+      if (response.isSuccess) {
+        final responseData = response.data['data'];
+        final userData = responseData['user'];
+
+        // Don't store tokens or user - user should login manually
+        // Create user object just for return value (to indicate success)
+        final user = User(
+          id: userData['id'],
+          email: userData['email'],
+          name: userData['name'],
+          role: UserRole.values.firstWhere(
+            (e) => e.name == userData['role'],
+            orElse: () => UserRole.admin,
+          ),
+          organizationId: userData['organizationId'] ?? '',
+          isSuperAdmin: userData['isSuperAdmin'] ?? false,
+        );
+
+        // Don't save user or tokens - user needs to login manually
+        return user;
+      } else {
+        ErrorService.showErrorSnackbar(
+          message: response.message ?? 'Registration failed',
+          error: 'Registration Error',
+        );
+        return null;
+      }
+    } catch (e) {
+      print('Registration error: $e');
+      ErrorService.showErrorSnackbar(
+        message: 'Registration failed: ${e.toString()}',
+        error: 'Registration Error',
+      );
+      return null;
+    }
+  }
 }

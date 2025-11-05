@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/user_role.dart';
 import '../providers/auth_provider.dart';
+import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -182,6 +183,20 @@ class _LoginScreenState extends State<LoginScreen> {
                               ),
                       );
                     },
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Register Link
+                  TextButton(
+                    onPressed: () {
+                      Navigator.push(
+                        context,
+                        MaterialPageRoute(
+                          builder: (context) => const RegisterScreen(),
+                        ),
+                      );
+                    },
+                    child: const Text('Don\'t have an account? Register'),
                   ),
                   const SizedBox(height: 24),
 

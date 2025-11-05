@@ -67,6 +67,55 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<User?> registerOrganization({
+    required String organizationName,
+    required String organizationEmail,
+    String? organizationPhone,
+    String? organizationAddress,
+    required String industry,
+    required String adminName,
+    required String adminEmail,
+    required String adminPassword,
+    required String confirmPassword,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final user = await _authService.registerOrganization(
+        organizationName: organizationName,
+        organizationEmail: organizationEmail,
+        organizationPhone: organizationPhone,
+        organizationAddress: organizationAddress,
+        industry: industry,
+        adminName: adminName,
+        adminEmail: adminEmail,
+        adminPassword: adminPassword,
+        confirmPassword: confirmPassword,
+      );
+
+      if (user != null) {
+        // Don't automatically log in - user should login manually
+        // Clear user so they go back to login screen
+        _currentUser = null;
+        _isLoading = false;
+        notifyListeners();
+        return user; // Return user to indicate success, but don't set as current
+      } else {
+        _errorMessage = 'Registration failed';
+        _isLoading = false;
+        notifyListeners();
+        return null;
+      }
+    } catch (e) {
+      _errorMessage = 'An error occurred during registration';
+      _isLoading = false;
+      notifyListeners();
+      return null;
+    }
+  }
+
   void clearError() {
     _errorMessage = null;
     notifyListeners();
