@@ -9,6 +9,9 @@ import 'models/user_role.dart';
 import 'services/api_client.dart';
 import 'services/error_service.dart';
 
+// Global RouteObserver for handling route changes
+final RouteObserver<PageRoute> routeObserver = RouteObserver<PageRoute>();
+
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
 
@@ -33,6 +36,7 @@ class MyApp extends StatelessWidget {
         title: 'HR Management',
         debugShowCheckedModeBanner: false,
         navigatorKey: navigatorKey,
+        navigatorObservers: [routeObserver],
         theme: ThemeData(
           colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
           useMaterial3: true,

@@ -36,8 +36,8 @@ class DepartmentService {
         throw Exception(response.message ?? 'Failed to fetch departments');
       }
     } catch (e) {
-      // Fallback to mock data if API fails
-      return _getMockDepartments();
+      // Re-throw error instead of falling back to mock data
+      throw Exception('Failed to fetch departments: $e');
     }
   }
 
@@ -52,12 +52,8 @@ class DepartmentService {
         throw Exception(response.message ?? 'Failed to fetch department');
       }
     } catch (e) {
-      // Fallback to mock data
-      final mockDepartments = _getMockDepartments();
-      return mockDepartments.firstWhere(
-        (dept) => dept.id == departmentId,
-        orElse: () => mockDepartments.first,
-      );
+      // Re-throw error instead of falling back to mock data
+      throw Exception('Failed to fetch department: $e');
     }
   }
 
@@ -199,8 +195,8 @@ class DepartmentService {
       final departments = await getAllDepartments(limit: 100);
       return departments.map((dept) => dept.name).toList();
     } catch (e) {
-      final mockDepartments = _getMockDepartments();
-      return mockDepartments.map((dept) => dept.name).toList();
+      // Re-throw error instead of falling back to mock data
+      throw Exception('Failed to fetch department names: $e');
     }
   }
 

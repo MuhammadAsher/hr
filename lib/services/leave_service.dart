@@ -40,8 +40,8 @@ class LeaveService {
         throw Exception(response.message ?? 'Failed to fetch leave requests');
       }
     } catch (e) {
-      // Fallback to mock data if API fails
-      return _getMockLeaveRequests();
+      // Re-throw error instead of falling back to mock data
+      throw Exception('Failed to fetch leave requests: $e');
     }
   }
 
@@ -61,12 +61,8 @@ class LeaveService {
         throw Exception(response.message ?? 'Failed to fetch leave request');
       }
     } catch (e) {
-      // Fallback to mock data
-      final mockRequests = _getMockLeaveRequests();
-      return mockRequests.firstWhere(
-        (request) => request.id == requestId,
-        orElse: () => mockRequests.first,
-      );
+      // Re-throw error instead of falling back to mock data
+      throw Exception('Failed to fetch leave request: $e');
     }
   }
 

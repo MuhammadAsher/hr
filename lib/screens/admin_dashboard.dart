@@ -1,6 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_employee_service.dart';
+import '../services/department_service.dart';
+import '../services/leave_service.dart';
+import '../services/error_service.dart';
+import '../main.dart';
 import 'employee_management_screen.dart';
 import 'leave_management_screen.dart';
 import 'department_management_screen.dart';
@@ -9,8 +14,146 @@ import 'pdf_generation_screen.dart';
 import 'email_notifications_screen.dart';
 import 'advanced_reporting_screen.dart';
 
-class AdminDashboard extends StatelessWidget {
+class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
+
+  @override
+  State<AdminDashboard> createState() => _AdminDashboardState();
+}
+
+class _AdminDashboardState extends State<AdminDashboard> with RouteAware, WidgetsBindingObserver {
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
+  final DepartmentService _departmentService = DepartmentService();
+  final LeaveService _leaveService = LeaveService();
+
+  int _totalEmployees = 0;
+  int _totalDepartments = 0;
+  int _pendingLeaves = 0;
+  int _activeProjects = 0; // This might need a task service if implemented
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addObserver(this);
+    _loadDashboardData();
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Subscribe to route changes
+    routeObserver.subscribe(this, ModalRoute.of(context) as PageRoute);
+  }
+
+  @override
+  void dispose() {
+    routeObserver.unsubscribe(this);
+    WidgetsBinding.instance.removeObserver(this);
+    super.dispose();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed) {
+      // Refresh data when app comes back to foreground
+      _loadDashboardData();
+    }
+  }
+
+  // Called when the current route has been pushed.
+  @override
+  void didPush() {
+    _loadDashboardData();
+  }
+
+  // Called when the top route has been popped off, and this route shows up.
+  @override
+  void didPopNext() {
+    // Refresh data when returning to this screen
+    _loadDashboardData();
+  }
+
+  Future<void> _loadDashboardData() async {
+    setState(() => _isLoading = true);
+
+    try {
+      // Fetch all data in parallel
+      final results = await Future.wait([
+        _fetchTotalEmployees(),
+        _fetchTotalDepartments(),
+        _fetchPendingLeaves(),
+        _fetchActiveProjects(),
+      ]);
+
+      setState(() {
+        _totalEmployees = results[0] as int;
+        _totalDepartments = results[1] as int;
+        _pendingLeaves = results[2] as int;
+        _activeProjects = results[3] as int;
+        _isLoading = false;
+      });
+    } catch (e) {
+      print('❌ Error loading dashboard data: $e');
+      setState(() => _isLoading = false);
+      if (mounted) {
+        ErrorService.showErrorSnackbar(
+          message: 'Failed to load dashboard data',
+          error: 'Loading Error',
+        );
+      }
+    }
+  }
+
+  Future<int> _fetchTotalEmployees() async {
+    try {
+      // Use the efficient count method - gets all employees (no status filter)
+      return await _employeeService.getTotalEmployeeCount();
+    } catch (e) {
+      print('Error fetching employee count: $e');
+      // Fallback to fetching all employees and counting
+      try {
+        // Fetch all employees with high limit (don't pass status to get all)
+        final employees = await _employeeService.getAllEmployees(limit: 1000);
+        return employees.length;
+      } catch (e2) {
+        print('Fallback also failed: $e2');
+        return 0;
+      }
+    }
+  }
+
+  Future<int> _fetchTotalDepartments() async {
+    try {
+      // Fetch departments - API returns paginated response
+      // For now, fetch with high limit to get count
+      final departments = await _departmentService.getAllDepartments(limit: 1000);
+      return departments.length;
+    } catch (e) {
+      print('Error fetching departments: $e');
+      return 0;
+    }
+  }
+
+  Future<int> _fetchPendingLeaves() async {
+    try {
+      // Fetch pending leave requests
+      final leaveRequests = await _leaveService.getAllLeaveRequests(
+        status: 'pending',
+        limit: 1000,
+      );
+      return leaveRequests.length;
+    } catch (e) {
+      print('Error fetching pending leaves: $e');
+      return 0;
+    }
+  }
+
+  Future<int> _fetchActiveProjects() async {
+    // TODO: Implement when task/project service is available
+    // For now, return 0
+    return 0;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -82,11 +225,28 @@ class AdminDashboard extends StatelessWidget {
             const SizedBox(height: 24),
 
             // Statistics Cards
-            Text(
-              'Overview',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Overview',
+                  style: Theme.of(
+                    context,
+                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                ),
+                if (_isLoading)
+                  const SizedBox(
+                    width: 20,
+                    height: 20,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                else
+                  IconButton(
+                    icon: const Icon(Icons.refresh),
+                    onPressed: _loadDashboardData,
+                    tooltip: 'Refresh',
+                  ),
+              ],
             ),
             const SizedBox(height: 16),
             Row(
@@ -95,7 +255,7 @@ class AdminDashboard extends StatelessWidget {
                   child: _buildStatCard(
                     context,
                     'Total Employees',
-                    '45',
+                    _isLoading ? '...' : _totalEmployees.toString(),
                     Icons.people,
                     Colors.blue,
                   ),
@@ -105,7 +265,7 @@ class AdminDashboard extends StatelessWidget {
                   child: _buildStatCard(
                     context,
                     'Departments',
-                    '8',
+                    _isLoading ? '...' : _totalDepartments.toString(),
                     Icons.business,
                     Colors.green,
                   ),
@@ -119,7 +279,7 @@ class AdminDashboard extends StatelessWidget {
                   child: _buildStatCard(
                     context,
                     'Pending Leaves',
-                    '12',
+                    _isLoading ? '...' : _pendingLeaves.toString(),
                     Icons.pending_actions,
                     Colors.orange,
                   ),
@@ -129,7 +289,7 @@ class AdminDashboard extends StatelessWidget {
                   child: _buildStatCard(
                     context,
                     'Active Projects',
-                    '6',
+                    _isLoading ? '...' : _activeProjects.toString(),
                     Icons.work,
                     Colors.purple,
                   ),
@@ -150,13 +310,15 @@ class AdminDashboard extends StatelessWidget {
               context,
               'Manage Employees',
               Icons.person_add,
-              () {
-                Navigator.push(
+              () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const EmployeeManagementScreen(),
                   ),
                 );
+                // Refresh dashboard data when returning from employee management
+                _loadDashboardData();
               },
             ),
             const SizedBox(height: 12),
@@ -164,13 +326,15 @@ class AdminDashboard extends StatelessWidget {
               context,
               'Approve Leave Requests',
               Icons.check_circle_outline,
-              () {
-                Navigator.push(
+              () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const LeaveManagementScreen(),
                   ),
                 );
+                // Refresh dashboard data when returning from leave management
+                _loadDashboardData();
               },
             ),
             const SizedBox(height: 12),
@@ -187,13 +351,15 @@ class AdminDashboard extends StatelessWidget {
               context,
               'Manage Departments',
               Icons.corporate_fare,
-              () {
-                Navigator.push(
+              () async {
+                await Navigator.push(
                   context,
                   MaterialPageRoute(
                     builder: (context) => const DepartmentManagementScreen(),
                   ),
                 );
+                // Refresh dashboard data when returning from department management
+                _loadDashboardData();
               },
             ),
             const SizedBox(height: 12),

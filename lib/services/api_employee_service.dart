@@ -25,6 +25,7 @@ class ApiEmployeeService {
       final response = await _apiClient.get('/employees', queryParams: queryParams);
 
       if (response.isSuccess) {
+        // API returns: { data: [...], total: count, page, limit, totalPages }
         final List<dynamic> employeesData = response.data['data'] ?? [];
         return employeesData.map((json) => Employee.fromApiJson(json)).toList();
       } else {
@@ -136,5 +137,41 @@ class ApiEmployeeService {
   // Get active employees
   Future<List<Employee>> getActiveEmployees() async {
     return getAllEmployees(status: 'active');
+  }
+
+  // Get total employee count
+  Future<int> getTotalEmployeeCount() async {
+    try {
+      // Don't pass status filter to get ALL employees regardless of status
+      final response = await _apiClient.get('/employees', queryParams: {
+        'page': '1',
+        'limit': '1', // We only need the total count, not the actual data
+        // Don't pass status - backend will return all employees
+      });
+
+      if (response.isSuccess) {
+        // API returns: { data: [...], total: count, page, limit, totalPages }
+        // The 'total' field contains the total count
+        final total = response.data['total'];
+        print('📊 Employee count API response - total: $total, data keys: ${response.data.keys}');
+        
+        if (total != null) {
+          final count = total is int ? total : int.tryParse(total.toString()) ?? 0;
+          print('✅ Total employee count: $count');
+          return count;
+        }
+        
+        // Fallback: if total is not in response, fetch all and count
+        print('⚠️ Total not found in response, fetching all employees to count...');
+        final employees = await getAllEmployees(limit: 1000);
+        print('✅ Total employees (counted): ${employees.length}');
+        return employees.length;
+      } else {
+        throw Exception(response.message ?? 'Failed to fetch employee count');
+      }
+    } catch (e) {
+      print('❌ Error in getTotalEmployeeCount: $e');
+      throw Exception('Failed to fetch employee count: $e');
+    }
   }
 }
