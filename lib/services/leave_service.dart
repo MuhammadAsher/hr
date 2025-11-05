@@ -28,9 +28,14 @@ class LeaveService {
       if (response.isSuccess) {
         final responseData = response.data['data'];
         final List<dynamic> leaveRequests = responseData['leaveRequests'] ?? [];
-        return leaveRequests
-            .map((json) => LeaveRequest.fromJson(json))
-            .toList();
+        return leaveRequests.map((json) {
+          // Convert backend format to UI format if needed
+          final mappedJson = Map<String, dynamic>.from(json);
+          if (mappedJson.containsKey('leaveType')) {
+            mappedJson['leaveType'] = _mapLeaveTypeFromBackend(mappedJson['leaveType'] as String);
+          }
+          return LeaveRequest.fromJson(mappedJson);
+        }).toList();
       } else {
         throw Exception(response.message ?? 'Failed to fetch leave requests');
       }
@@ -46,7 +51,12 @@ class LeaveService {
       final response = await _apiClient.get('/leave-requests/$requestId');
 
       if (response.isSuccess) {
-        return LeaveRequest.fromJson(response.data['data']);
+        final json = Map<String, dynamic>.from(response.data['data']);
+        // Convert backend format to UI format if needed
+        if (json.containsKey('leaveType')) {
+          json['leaveType'] = _mapLeaveTypeFromBackend(json['leaveType'] as String);
+        }
+        return LeaveRequest.fromJson(json);
       } else {
         throw Exception(response.message ?? 'Failed to fetch leave request');
       }
@@ -60,6 +70,47 @@ class LeaveService {
     }
   }
 
+  // Map UI leave type to backend format
+  String _mapLeaveTypeToBackend(String uiLeaveType) {
+    switch (uiLeaveType.toLowerCase()) {
+      case 'annual leave':
+        return 'annual';
+      case 'sick leave':
+        return 'sick';
+      case 'casual leave':
+        return 'personal';
+      case 'maternity leave':
+        return 'maternity';
+      case 'paternity leave':
+        return 'paternity';
+      case 'unpaid leave':
+        return 'emergency';
+      default:
+        // If already in backend format, return as is
+        return uiLeaveType.toLowerCase();
+    }
+  }
+
+  // Map backend leave type to UI format
+  String _mapLeaveTypeFromBackend(String backendLeaveType) {
+    switch (backendLeaveType.toLowerCase()) {
+      case 'annual':
+        return 'Annual Leave';
+      case 'sick':
+        return 'Sick Leave';
+      case 'personal':
+        return 'Casual Leave';
+      case 'maternity':
+        return 'Maternity Leave';
+      case 'paternity':
+        return 'Paternity Leave';
+      case 'emergency':
+        return 'Unpaid Leave';
+      default:
+        return backendLeaveType;
+    }
+  }
+
   // Submit new leave request
   Future<bool> submitLeaveRequest({
     required String type,
@@ -69,19 +120,27 @@ class LeaveService {
     String? employeeId,
   }) async {
     try {
+      // Convert UI leave type to backend format
+      final backendLeaveType = _mapLeaveTypeToBackend(type);
+      
       final body = <String, dynamic>{
-        'type': type,
+        'leaveType': backendLeaveType, // Backend expects 'leaveType', not 'type'
         'startDate': startDate.toIso8601String(),
         'endDate': endDate.toIso8601String(),
-        'reason': reason,
+        'reason': reason.trim(),
       };
 
       if (employeeId != null) body['employeeId'] = employeeId;
 
       final response = await _apiClient.post('/leave-requests', body: body);
-      return response.isSuccess;
+      
+      if (!response.isSuccess) {
+        throw Exception(response.message ?? 'Failed to submit leave request');
+      }
+      
+      return true;
     } catch (e) {
-      return false;
+      rethrow;
     }
   }
 
@@ -96,10 +155,10 @@ class LeaveService {
     try {
       final body = <String, dynamic>{};
 
-      if (type != null) body['type'] = type;
+      if (type != null) body['leaveType'] = _mapLeaveTypeToBackend(type);
       if (startDate != null) body['startDate'] = startDate.toIso8601String();
       if (endDate != null) body['endDate'] = endDate.toIso8601String();
-      if (reason != null) body['reason'] = reason;
+      if (reason != null) body['reason'] = reason.trim();
 
       final response = await _apiClient.put(
         '/leave-requests/$requestId',

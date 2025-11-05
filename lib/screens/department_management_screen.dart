@@ -436,6 +436,7 @@ class _DepartmentFormDialogState extends State<_DepartmentFormDialog> {
               ),
               const SizedBox(height: 16),
               DropdownButtonFormField<Employee>(
+                isExpanded: true,
                 initialValue: _selectedManager,
                 decoration: const InputDecoration(
                   labelText: 'Manager',
@@ -444,9 +445,20 @@ class _DepartmentFormDialogState extends State<_DepartmentFormDialog> {
                 items: _employees.map((employee) {
                   return DropdownMenuItem<Employee>(
                     value: employee,
-                    child: Text('${employee.name} (${employee.position})'),
+                    child: Text(
+                      '${employee.name} (${employee.position})',
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   );
                 }).toList(),
+                selectedItemBuilder: (context) {
+                  return _employees.map((employee) {
+                    return Text(
+                      '${employee.name} (${employee.position})',
+                      overflow: TextOverflow.ellipsis,
+                    );
+                  }).toList();
+                },
                 onChanged: (Employee? value) {
                   setState(() {
                     _selectedManager = value;

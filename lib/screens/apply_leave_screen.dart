@@ -3,6 +3,7 @@ import 'package:provider/provider.dart';
 import '../models/leave_request.dart';
 import '../services/leave_service.dart';
 import '../providers/auth_provider.dart';
+import '../services/error_service.dart';
 import 'package:intl/intl.dart';
 
 class ApplyLeaveScreen extends StatefulWidget {
@@ -85,28 +86,50 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
     if (_formKey.currentState!.validate()) {
       setState(() => _isLoading = true);
 
-      final authProvider = Provider.of<AuthProvider>(context, listen: false);
-      final request = LeaveRequest(
-        id: DateTime.now().millisecondsSinceEpoch.toString(),
-        employeeId: authProvider.currentUser!.id,
-        employeeName: authProvider.currentUser!.name,
-        leaveType: _selectedLeaveType,
-        startDate: _startDate,
-        endDate: _endDate,
-        reason: _reasonController.text,
-        requestDate: DateTime.now(),
-      );
-
-      await _leaveService.createLeaveRequest(request);
-
-      setState(() => _isLoading = false);
-
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Leave request submitted successfully')),
+      try {
+        final authProvider = Provider.of<AuthProvider>(context, listen: false);
+        final request = LeaveRequest(
+          id: DateTime.now().millisecondsSinceEpoch.toString(),
+          employeeId: authProvider.currentUser!.id,
+          employeeName: authProvider.currentUser!.name,
+          leaveType: _selectedLeaveType,
+          startDate: _startDate,
+          endDate: _endDate,
+          reason: _reasonController.text.trim(),
+          requestDate: DateTime.now(),
         );
-        _reasonController.clear();
-        _loadMyLeaveRequests();
+
+        final success = await _leaveService.createLeaveRequest(request);
+
+        setState(() => _isLoading = false);
+
+        if (mounted) {
+          if (success) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Leave request submitted successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+            _reasonController.clear();
+            _loadMyLeaveRequests();
+          } else {
+            ErrorService.showErrorAlert(
+              title: 'Failed to Submit Leave Request',
+              message: 'Please check your input and try again',
+              error: 'Submission Error',
+            );
+          }
+        }
+      } catch (e) {
+        setState(() => _isLoading = false);
+        if (mounted) {
+          ErrorService.showErrorAlert(
+            title: 'Failed to Submit Leave Request',
+            message: e.toString().replaceAll('Exception: ', ''),
+            error: 'Submission Error',
+          );
+        }
       }
     }
   }
@@ -200,10 +223,21 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                           labelText: 'Reason',
                           border: OutlineInputBorder(),
                           alignLabelWithHint: true,
+                          helperText: 'Minimum 10 characters required',
                         ),
                         maxLines: 4,
-                        validator: (value) =>
-                            value?.isEmpty ?? true ? 'Please enter reason' : null,
+                        validator: (value) {
+                          if (value == null || value.trim().isEmpty) {
+                            return 'Please enter reason';
+                          }
+                          if (value.trim().length < 10) {
+                            return 'Reason must be at least 10 characters';
+                          }
+                          if (value.trim().length > 500) {
+                            return 'Reason must be less than 500 characters';
+                          }
+                          return null;
+                        },
                       ),
                       const SizedBox(height: 24),
                       ElevatedButton(
