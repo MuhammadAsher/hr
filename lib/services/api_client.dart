@@ -33,32 +33,65 @@ class ApiClient {
 
   String? _authToken;
   String? _refreshToken;
+  bool _initialized = false;
+  Future<void>? _initializationFuture;
 
   // Initialize with stored tokens
   Future<void> initialize() async {
+    if (_initialized) return;
+    if (_initializationFuture != null) {
+      return _initializationFuture;
+    }
+    
+    _initializationFuture = _loadTokens();
+    await _initializationFuture;
+    _initialized = true;
+  }
+
+  // Load tokens from SharedPreferences
+  Future<void> _loadTokens() async {
     final prefs = await SharedPreferences.getInstance();
     _authToken = prefs.getString(_tokenKey);
     _refreshToken = prefs.getString(_refreshTokenKey);
+    
+    if (_authToken != null) {
+      print('🔑 Loaded auth token from storage');
+    }
+  }
+
+  // Ensure tokens are loaded (lazy loading)
+  Future<void> _ensureInitialized() async {
+    if (!_initialized || _authToken == null) {
+      await _loadTokens();
+      _initialized = true;
+    }
   }
 
   // Set authentication tokens
   Future<void> setTokens(String authToken, String refreshToken) async {
     _authToken = authToken;
     _refreshToken = refreshToken;
+    _initialized = true;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_tokenKey, authToken);
     await prefs.setString(_refreshTokenKey, refreshToken);
+    
+    print('🔑 Auth tokens stored successfully');
   }
 
   // Clear authentication tokens
   Future<void> clearTokens() async {
     _authToken = null;
     _refreshToken = null;
+    _initialized = false;
+    _initializationFuture = null;
 
     final prefs = await SharedPreferences.getInstance();
     await prefs.remove(_tokenKey);
     await prefs.remove(_refreshTokenKey);
+    
+    print('🔑 Auth tokens cleared');
   }
 
   // Get headers with authentication
@@ -73,6 +106,14 @@ class ApiClient {
     }
 
     return headers;
+  }
+
+  // Get headers with authentication (async version that ensures tokens are loaded)
+  Future<Map<String, String>> _getHeadersAsync({bool includeAuth = true}) async {
+    if (includeAuth) {
+      await _ensureInitialized();
+    }
+    return _getHeaders(includeAuth: includeAuth);
   }
 
   // Handle API response
@@ -115,7 +156,13 @@ class ApiClient {
 
   // Refresh authentication token
   Future<bool> _refreshAuthToken() async {
-    if (_refreshToken == null) return false;
+    // Ensure tokens are loaded before attempting refresh
+    await _ensureInitialized();
+    
+    if (_refreshToken == null) {
+      print('⚠️ Cannot refresh token: refresh token is null');
+      return false;
+    }
 
     try {
       final response = await http.post(
@@ -126,11 +173,17 @@ class ApiClient {
 
       if (response.statusCode == 200) {
         final data = json.decode(response.body);
-        await setTokens(data['token'], data['refreshToken']);
-        return true;
+        final token = data['data']?['token'] ?? data['token'];
+        final refreshToken = data['data']?['refreshToken'] ?? data['refreshToken'];
+        
+        if (token != null && refreshToken != null) {
+          await setTokens(token, refreshToken);
+          print('🔑 Token refreshed successfully');
+          return true;
+        }
       }
     } catch (e) {
-      print('Token refresh failed: $e');
+      print('❌ Token refresh failed: $e');
     }
 
     return false;
@@ -145,6 +198,11 @@ class ApiClient {
     bool requireAuth = true,
   }) async {
     try {
+      // Ensure tokens are loaded before making authenticated requests
+      if (requireAuth) {
+        await _ensureInitialized();
+      }
+
       // Build URL
       var uri = Uri.parse('$_baseUrl$endpoint');
       if (queryParams != null) {
@@ -160,6 +218,14 @@ class ApiClient {
       // Prepare request
       late http.Response response;
       final headers = _getHeaders(includeAuth: requireAuth);
+      
+      // Debug log if token is missing for authenticated requests
+      if (requireAuth && _authToken == null) {
+        print('⚠️ Warning: Making authenticated request without token');
+      } else if (requireAuth && _authToken != null) {
+        print('🔑 Using auth token for request');
+      }
+      
       final bodyJson = body != null ? json.encode(body) : null;
 
       // Make request based on method with timeout
@@ -217,9 +283,10 @@ class ApiClient {
       }
 
       // Debug logging
-      print(
-        '📥 API Response: ${response.statusCode} ${response.body.substring(0, 200)}...',
-      );
+      final responsePreview = response.body.length > 200
+          ? '${response.body.substring(0, 200)}...'
+          : response.body;
+      print('📥 API Response: ${response.statusCode} $responsePreview');
 
       return _handleResponse(response);
     } on SocketException catch (e) {

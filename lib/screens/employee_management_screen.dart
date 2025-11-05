@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/employee.dart';
-import '../services/employee_service.dart';
 import '../services/api_employee_service.dart';
+import '../services/error_service.dart';
 import 'package:intl/intl.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
@@ -13,12 +13,10 @@ class EmployeeManagementScreen extends StatefulWidget {
 }
 
 class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
-  final EmployeeService _employeeService =
-      EmployeeService(); // Fallback for mock data
-  final ApiEmployeeService _apiEmployeeService =
-      ApiEmployeeService(); // API service
+  final ApiEmployeeService _apiEmployeeService = ApiEmployeeService();
   List<Employee> _employees = [];
   bool _isLoading = true;
+  String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
 
   @override
@@ -34,49 +32,66 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   }
 
   Future<void> _loadEmployees() async {
-    setState(() => _isLoading = true);
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
     try {
-      // Try API first
       final employees = await _apiEmployeeService.getAllEmployees();
       setState(() {
         _employees = employees;
         _isLoading = false;
+        _errorMessage = null;
       });
     } catch (e) {
-      print('API failed, falling back to mock data: $e');
-      // Fallback to mock data
-      final employees = await _employeeService.getAllEmployees();
+      print('❌ Failed to load employees: $e');
       setState(() {
-        _employees = employees;
         _isLoading = false;
+        _errorMessage = e.toString();
       });
+      
+      // Show error alert
+      ErrorService.showErrorAlert(
+        title: 'Failed to Load Employees',
+        message: e.toString().replaceAll('Exception: ', ''),
+        error: 'API Error',
+        onOk: () {
+          // Optionally retry on OK
+        },
+      );
     }
   }
 
   Future<void> _searchEmployees(String query) async {
-    setState(() => _isLoading = true);
+    if (query.isEmpty) {
+      _loadEmployees();
+      return;
+    }
+
+    setState(() {
+      _isLoading = true;
+      _errorMessage = null;
+    });
+    
     try {
-      // For now, just reload all employees and filter locally
-      // TODO: Implement search in API service
-      final employees = await _apiEmployeeService.getAllEmployees();
-      final filteredEmployees = employees.where((emp) {
-        return emp.name.toLowerCase().contains(query.toLowerCase()) ||
-            emp.email.toLowerCase().contains(query.toLowerCase()) ||
-            emp.department.toLowerCase().contains(query.toLowerCase()) ||
-            emp.position.toLowerCase().contains(query.toLowerCase());
-      }).toList();
-      setState(() {
-        _employees = filteredEmployees;
-        _isLoading = false;
-      });
-    } catch (e) {
-      print('API search failed, falling back to mock data: $e');
-      // Fallback to mock data
-      final employees = await _employeeService.searchEmployees(query);
+      // Use API search
+      final employees = await _apiEmployeeService.searchEmployees(query);
       setState(() {
         _employees = employees;
         _isLoading = false;
+        _errorMessage = null;
       });
+    } catch (e) {
+      print('❌ Failed to search employees: $e');
+      setState(() {
+        _isLoading = false;
+        _errorMessage = e.toString();
+      });
+      
+      ErrorService.showErrorSnackbar(
+        message: 'Failed to search employees: ${e.toString().replaceAll('Exception: ', '')}',
+        error: 'Search Error',
+      );
     }
   }
 
@@ -101,7 +116,6 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
     if (confirmed == true) {
       try {
-        // Try API first
         await _apiEmployeeService.deleteEmployee(id);
         _loadEmployees();
         if (mounted) {
@@ -113,18 +127,12 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           );
         }
       } catch (e) {
-        print('API delete failed, falling back to mock data: $e');
-        // Fallback to mock service
-        await _employeeService.deleteEmployee(id);
-        _loadEmployees();
-        if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(
-              content: Text('Employee deleted (using mock data)'),
-              backgroundColor: Colors.orange,
-            ),
-          );
-        }
+        print('❌ Failed to delete employee: $e');
+        ErrorService.showErrorAlert(
+          title: 'Failed to Delete Employee',
+          message: e.toString().replaceAll('Exception: ', ''),
+          error: 'Delete Error',
+        );
       }
     }
   }
@@ -176,9 +184,77 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
           Expanded(
             child: _isLoading
                 ? const Center(child: CircularProgressIndicator())
-                : _employees.isEmpty
-                ? const Center(child: Text('No employees found'))
-                : ListView.builder(
+                : _errorMessage != null
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.error_outline,
+                              size: 64,
+                              color: Colors.red[300],
+                            ),
+                            const SizedBox(height: 16),
+                            Text(
+                              'Failed to load employees',
+                              style: TextStyle(
+                                fontSize: 18,
+                                fontWeight: FontWeight.bold,
+                                color: Colors.grey[800],
+                              ),
+                            ),
+                            const SizedBox(height: 8),
+                            Padding(
+                              padding: const EdgeInsets.symmetric(horizontal: 32),
+                              child: Text(
+                                _errorMessage!.replaceAll('Exception: ', ''),
+                                textAlign: TextAlign.center,
+                                style: TextStyle(
+                                  color: Colors.grey[600],
+                                  fontSize: 14,
+                                ),
+                              ),
+                            ),
+                            const SizedBox(height: 24),
+                            ElevatedButton.icon(
+                              onPressed: _loadEmployees,
+                              icon: const Icon(Icons.refresh),
+                              label: const Text('Retry'),
+                            ),
+                          ],
+                        ),
+                      )
+                    : _employees.isEmpty
+                        ? Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(
+                                  Icons.people_outline,
+                                  size: 64,
+                                  color: Colors.grey[400],
+                                ),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No employees found',
+                                  style: TextStyle(
+                                    fontSize: 18,
+                                    fontWeight: FontWeight.bold,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Add your first employee to get started',
+                                  style: TextStyle(
+                                    color: Colors.grey[500],
+                                    fontSize: 14,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          )
+                        : ListView.builder(
                     padding: const EdgeInsets.symmetric(horizontal: 16),
                     itemCount: _employees.length,
                     itemBuilder: (context, index) {
@@ -435,38 +511,14 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
           );
         }
       } catch (e) {
-        print('❌ API call failed: $e');
-        // Fallback to mock service for development
-        final employeeService = EmployeeService();
-        final employee = Employee(
-          id:
-              widget.employee?.id ??
-              DateTime.now().millisecondsSinceEpoch.toString(),
-          name: _nameController.text,
-          email: _emailController.text,
-          phone: _phoneController.text,
-          department: _selectedDepartment,
-          position: _positionController.text,
-          salary: double.parse(_salaryController.text),
-          joinDate: widget.employee?.joinDate ?? DateTime.now(),
-          status: widget.employee?.status ?? 'Active',
-        );
-
-        if (widget.employee == null) {
-          await employeeService.addEmployee(employee);
-        } else {
-          await employeeService.updateEmployee(employee);
-        }
-
+        print('❌ Failed to save employee: $e');
         if (mounted) {
-          Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                '${widget.employee == null ? 'Employee added' : 'Employee updated'} (using mock data)',
-              ),
-              backgroundColor: Colors.orange,
-            ),
+          ErrorService.showErrorAlert(
+            title: widget.employee == null
+                ? 'Failed to Add Employee'
+                : 'Failed to Update Employee',
+            message: e.toString().replaceAll('Exception: ', ''),
+            error: 'Save Error',
           );
         }
       }
