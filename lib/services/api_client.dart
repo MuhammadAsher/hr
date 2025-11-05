@@ -120,6 +120,27 @@ class ApiClient {
   ApiResponse _handleResponse(http.Response response) {
     final statusCode = response.statusCode;
 
+    // Handle 204 No Content (no response body)
+    if (statusCode == 204) {
+      print('✅ API Success: $statusCode (No Content)');
+      return ApiResponse.success({'message': 'Operation completed successfully'});
+    }
+
+    // Handle empty body responses
+    if (response.body.isEmpty || response.body.trim().isEmpty) {
+      if (statusCode >= 200 && statusCode < 300) {
+        print('✅ API Success: $statusCode (Empty body)');
+        return ApiResponse.success({'message': 'Operation completed successfully'});
+      } else {
+        print('❌ API Error: $statusCode (Empty body)');
+        return ApiResponse.error(
+          statusCode: statusCode,
+          message: 'Request failed with status $statusCode',
+          error: 'HTTP Error',
+        );
+      }
+    }
+
     try {
       final data = json.decode(response.body);
 
@@ -146,6 +167,11 @@ class ApiClient {
       }
     } catch (e) {
       print('❌ JSON Parse Error: $e');
+      // If parsing fails but status is success, return success with raw body
+      if (statusCode >= 200 && statusCode < 300) {
+        print('⚠️ Warning: Success status but JSON parse failed, returning raw response');
+        return ApiResponse.success({'raw': response.body});
+      }
       return ApiResponse.error(
         statusCode: statusCode,
         message: 'Failed to parse response',
