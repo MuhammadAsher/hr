@@ -86,20 +86,37 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 48),
 
-                  // Role Segmented Control
-                  Container(
-                    decoration: BoxDecoration(
-                      color: Colors.grey[200],
-                      borderRadius: BorderRadius.circular(12),
+                  // Role Dropdown Field
+                  DropdownButtonFormField<UserRole>(
+                    value: _selectedRole,
+                    decoration: InputDecoration(
+                      labelText: 'Role',
+                      prefixIcon: const Icon(Icons.person_outline),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
                     ),
-                    child: Row(
-                      children: [
-                        Expanded(child: _buildRoleButton(UserRole.employee)),
-                        Expanded(child: _buildRoleButton(UserRole.admin)),
-                      ],
-                    ),
+                    items: UserRole.values.map((role) {
+                      return DropdownMenuItem<UserRole>(
+                        value: role,
+                        child: Text(role.displayName),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      if (value != null) {
+                        setState(() {
+                          _selectedRole = value;
+                        });
+                      }
+                    },
+                    validator: (value) {
+                      if (value == null) {
+                        return 'Please select a role';
+                      }
+                      return null;
+                    },
                   ),
-                  const SizedBox(height: 32),
+                  const SizedBox(height: 16),
 
                   // Email Field
                   TextFormField(
@@ -379,31 +396,4 @@ class _LoginScreenState extends State<LoginScreen> {
     );
   }
 
-  Widget _buildRoleButton(UserRole role) {
-    final isSelected = _selectedRole == role;
-    return GestureDetector(
-      onTap: () {
-        setState(() {
-          _selectedRole = role;
-        });
-      },
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        decoration: BoxDecoration(
-          color: isSelected
-              ? Theme.of(context).primaryColor
-              : Colors.transparent,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Text(
-          role.displayName,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            color: isSelected ? Colors.white : Colors.grey[700],
-            fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
-          ),
-        ),
-      ),
-    );
-  }
 }
