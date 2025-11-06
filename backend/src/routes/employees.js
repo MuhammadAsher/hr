@@ -409,7 +409,7 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
     const employeeId = await Employee.generateEmployeeId(organizationId);
 
     // Default password for new employees (they will reset it later)
-    const defaultPassword = 'revolutic123';
+    const defaultPassword = 'employee123';
 
     // Normalize status to lowercase (handle 'Active' -> 'active')
     const normalizedStatus = status ? status.toLowerCase() : 'active';
@@ -503,7 +503,7 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
 
       res.status(201).json({
         data: createdEmployee,
-        message: 'Employee created successfully with user account. Default password: revolutic123',
+        message: 'Employee created successfully with user account. Default password: employee123',
       });
     } catch (createError) {
       // Rollback transaction on error

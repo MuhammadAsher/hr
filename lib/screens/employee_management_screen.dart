@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../models/employee.dart';
 import '../services/api_employee_service.dart';
 import '../services/error_service.dart';
+import '../services/department_service.dart';
+import '../services/organization_service.dart';
+import '../providers/auth_provider.dart';
 import '../constants/positions.dart';
 import 'package:intl/intl.dart';
 
@@ -426,26 +430,30 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
   final _phoneController = TextEditingController();
   final _positionController = TextEditingController();
   final _salaryController = TextEditingController();
+  final _joinDateController = TextEditingController();
 
-  String _selectedDepartment = 'Engineering';
-  final List<String> _departments = [
-    'Engineering',
-    'Marketing',
-    'Sales',
-    'HR',
-    'Finance',
-    'Operations',
-  ];
+  final DepartmentService _departmentService = DepartmentService();
+  final OrganizationService _organizationService = OrganizationService();
+  String? _selectedDepartment;
+  List<String> _departments = [];
+  bool _isLoadingDepartments = true;
+  
+  String? _organizationName;
+  bool _isLoadingOrganization = true;
 
   String? _selectedPosition;
   bool _isCustomPosition = false;
   final List<String> _availablePositions = EmployeePositions.allPositions;
   final TextEditingController _searchPositionController = TextEditingController();
   List<String> _filteredPositions = EmployeePositions.allPositions;
+  
+  DateTime? _selectedJoinDate;
 
   @override
   void initState() {
     super.initState();
+    _loadDepartments();
+    _loadOrganizationName();
     if (widget.employee != null) {
       _nameController.text = widget.employee!.name;
       _emailController.text = widget.employee!.email;
@@ -453,6 +461,12 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
       _positionController.text = widget.employee!.position;
       _salaryController.text = widget.employee!.salary.toString();
       _selectedDepartment = widget.employee!.department;
+      
+      // Set join date if available
+      if (widget.employee!.joinDate != null) {
+        _selectedJoinDate = widget.employee!.joinDate;
+        _joinDateController.text = DateFormat('yyyy-MM-dd').format(widget.employee!.joinDate!);
+      }
       
       // Check if position is in predefined list
       if (EmployeePositions.isPredefined(widget.employee!.position)) {
@@ -462,6 +476,125 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
         _isCustomPosition = true;
         _selectedPosition = 'Custom';
       }
+    } else {
+      // Set default join date to today for new employees
+      _selectedJoinDate = DateTime.now();
+      _joinDateController.text = DateFormat('yyyy-MM-dd').format(DateTime.now());
+    }
+  }
+
+  Future<void> _loadDepartments() async {
+    setState(() {
+      _isLoadingDepartments = true;
+    });
+    
+    try {
+      final departments = await _departmentService.getAllDepartments();
+      final departmentNames = departments.map((dept) => dept.name).toList();
+      
+      setState(() {
+        _departments = departmentNames;
+        _isLoadingDepartments = false;
+        // Set default department if not set and departments are available
+        if (_selectedDepartment == null && _departments.isNotEmpty) {
+          _selectedDepartment = _departments.first;
+        }
+        // If editing and department exists in list, keep it; otherwise add it
+        if (widget.employee != null && 
+            !_departments.contains(widget.employee!.department)) {
+          _departments.add(widget.employee!.department);
+        }
+      });
+    } catch (e) {
+      print('❌ Failed to load departments: $e');
+      // Fallback to default departments if API fails
+      setState(() {
+        _departments = [
+          'Engineering',
+          'Marketing',
+          'Sales',
+          'HR',
+          'Finance',
+          'Operations',
+        ];
+        _isLoadingDepartments = false;
+        if (_selectedDepartment == null && _departments.isNotEmpty) {
+          _selectedDepartment = _departments.first;
+        }
+      });
+    }
+  }
+
+  Future<void> _loadOrganizationName() async {
+    setState(() {
+      _isLoadingOrganization = true;
+    });
+    
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final user = authProvider.currentUser;
+      
+      if (user != null) {
+        // First, try to get organization name from user object (from login response)
+        if (user.organizationName != null && user.organizationName!.isNotEmpty) {
+          setState(() {
+            _organizationName = user.organizationName;
+            _isLoadingOrganization = false;
+          });
+          return;
+        }
+        
+        // If not available in user object, try to fetch from API
+        if (user.organizationId.isNotEmpty) {
+          try {
+            final organization = await _organizationService.getOrganizationById(user.organizationId);
+            setState(() {
+              _organizationName = organization?.name ?? 'Your Organization';
+              _isLoadingOrganization = false;
+            });
+          } catch (e) {
+            print('⚠️ Could not fetch organization name from API: $e');
+            // Fallback to generic message
+            setState(() {
+              _organizationName = 'Your Organization';
+              _isLoadingOrganization = false;
+            });
+          }
+        } else {
+          setState(() {
+            _organizationName = 'Your Organization';
+            _isLoadingOrganization = false;
+          });
+        }
+      } else {
+        setState(() {
+          _organizationName = 'Your Organization';
+          _isLoadingOrganization = false;
+        });
+      }
+    } catch (e) {
+      print('❌ Error loading organization name: $e');
+      setState(() {
+        _organizationName = 'Your Organization';
+        _isLoadingOrganization = false;
+      });
+    }
+  }
+
+  Future<void> _selectJoinDate(BuildContext context) async {
+    final DateTime? picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedJoinDate ?? DateTime.now(),
+      firstDate: DateTime(2000),
+      lastDate: DateTime.now(),
+      helpText: 'Select Join Date',
+    );
+    
+    if (picked != null && picked != _selectedJoinDate) {
+      setState(() {
+        _selectedJoinDate = picked;
+        _joinDateController.text = DateFormat('yyyy-MM-dd').format(picked);
+      });
     }
   }
 
@@ -472,6 +605,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
     _phoneController.dispose();
     _positionController.dispose();
     _salaryController.dispose();
+    _joinDateController.dispose();
     _searchPositionController.dispose();
     super.dispose();
   }
@@ -673,30 +807,53 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
             : (_selectedPosition ?? _positionController.text.trim());
 
         if (widget.employee == null) {
+          // Validate department is selected
+          if (_selectedDepartment == null || _selectedDepartment!.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please select a department'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          
           // Create new employee via API
           print('🚀 Creating new employee via API...');
           final newEmployee = await apiEmployeeService.createEmployee(
-            name: _nameController.text,
-            email: _emailController.text,
-            phone: _phoneController.text,
-            department: _selectedDepartment,
+            name: _nameController.text.trim(),
+            email: _emailController.text.trim(),
+            phone: _phoneController.text.trim(),
+            department: _selectedDepartment!,
             position: positionValue,
             salary: double.parse(_salaryController.text),
-            joinDate: DateTime.now(),
+            joinDate: _selectedJoinDate ?? DateTime.now(),
             status: 'active',
           );
           print('✅ Employee created successfully: ${newEmployee.id}');
         } else {
+          // Validate department is selected
+          if (_selectedDepartment == null || _selectedDepartment!.isEmpty) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Please select a department'),
+                backgroundColor: Colors.red,
+              ),
+            );
+            return;
+          }
+          
           // Update existing employee via API
           print('🚀 Updating employee via API...');
           final updates = {
-            'name': _nameController.text,
-            'email': _emailController.text,
-            'phone': _phoneController.text,
-            'department': _selectedDepartment,
+            'name': _nameController.text.trim(),
+            'email': _emailController.text.trim(),
+            'phone': _phoneController.text.trim(),
+            'department': _selectedDepartment!,
             'position': positionValue,
             'salary': double.parse(_salaryController.text),
             'status': widget.employee!.status.toLowerCase(),
+            if (_selectedJoinDate != null) 'joinDate': _selectedJoinDate!.toIso8601String(),
           };
           final updatedEmployee = await apiEmployeeService.updateEmployee(
             widget.employee!.id,
@@ -707,16 +864,84 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
 
         if (mounted) {
           Navigator.pop(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text(
-                widget.employee == null
-                    ? 'Employee added successfully'
-                    : 'Employee updated successfully',
+          if (widget.employee == null) {
+            // Show success dialog with account creation info
+            showDialog(
+              context: context,
+              builder: (context) => AlertDialog(
+                title: const Text('Employee Added Successfully'),
+                content: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text('Employee has been added to your organization.'),
+                    const SizedBox(height: 12),
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: Colors.blue[50],
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(color: Colors.blue[200]!),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Icon(Icons.info_outline, 
+                                color: Colors.blue[900], 
+                                size: 20,
+                              ),
+                              const SizedBox(width: 8),
+                              Text(
+                                'Account Created',
+                                style: TextStyle(
+                                  fontWeight: FontWeight.bold,
+                                  color: Colors.blue[900],
+                                ),
+                              ),
+                            ],
+                          ),
+                          const SizedBox(height: 8),
+                          Text(
+                            'A user account has been created for this employee with:',
+                            style: TextStyle(fontSize: 12, color: Colors.grey[700]),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Email: ${_emailController.text.trim()}',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                          ),
+                          Text(
+                            'Default Password: employee123',
+                            style: TextStyle(fontSize: 12, fontWeight: FontWeight.w500),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'The employee can reset their password from the app.',
+                            style: TextStyle(fontSize: 11, color: Colors.grey[600], fontStyle: FontStyle.italic),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+                actions: [
+                  TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    child: const Text('OK'),
+                  ),
+                ],
               ),
-              backgroundColor: Colors.green,
-            ),
-          );
+            );
+          } else {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(
+                content: Text('Employee updated successfully'),
+                backgroundColor: Colors.green,
+              ),
+            );
+          }
         }
       } catch (e) {
         print('❌ Failed to save employee: $e');
@@ -744,10 +969,30 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
         child: ListView(
           padding: const EdgeInsets.all(16),
           children: [
+            // Organization Name (Read-only, not clickable)
+            _isLoadingOrganization
+                ? const SizedBox(
+                    height: 56,
+                    child: Center(child: CircularProgressIndicator()),
+                  )
+                : TextFormField(
+                    initialValue: _organizationName ?? 'Your Organization',
+                    decoration: InputDecoration(
+                      labelText: 'Organization',
+                      border: const OutlineInputBorder(),
+                      prefixIcon: const Icon(Icons.business),
+                      filled: true,
+                      fillColor: Colors.grey[100],
+                      helperText: 'Employee will be added to this organization',
+                    ),
+                    readOnly: true,
+                    enabled: false,
+                  ),
+            const SizedBox(height: 16),
             TextFormField(
               controller: _nameController,
               decoration: const InputDecoration(
-                labelText: 'Full Name',
+                labelText: 'Full Name *',
                 border: OutlineInputBorder(),
               ),
               validator: (value) =>
@@ -779,19 +1024,38 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
                   value?.isEmpty ?? true ? 'Please enter phone' : null,
             ),
             const SizedBox(height: 16),
-            DropdownButtonFormField<String>(
-              initialValue: _selectedDepartment,
-              decoration: const InputDecoration(
-                labelText: 'Department',
-                border: OutlineInputBorder(),
-              ),
-              items: _departments.map((dept) {
-                return DropdownMenuItem(value: dept, child: Text(dept));
-              }).toList(),
-              onChanged: (value) {
-                setState(() => _selectedDepartment = value!);
-              },
-            ),
+            _isLoadingDepartments
+                ? const Center(
+                    child: Padding(
+                      padding: EdgeInsets.all(16.0),
+                      child: CircularProgressIndicator(),
+                    ),
+                  )
+                : DropdownButtonFormField<String>(
+                    value: _selectedDepartment,
+                    decoration: const InputDecoration(
+                      labelText: 'Department *',
+                      border: OutlineInputBorder(),
+                      helperText: 'Select department from your organization',
+                    ),
+                    items: _departments.map((dept) {
+                      return DropdownMenuItem<String>(
+                        value: dept,
+                        child: Text(dept),
+                      );
+                    }).toList(),
+                    onChanged: (value) {
+                      setState(() {
+                        _selectedDepartment = value;
+                      });
+                    },
+                    validator: (value) {
+                      if (value == null || value.isEmpty) {
+                        return 'Please select a department';
+                      }
+                      return null;
+                    },
+                  ),
             const SizedBox(height: 16),
             // Position Field with Bottom Sheet Picker
             InkWell(
@@ -844,7 +1108,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
             TextFormField(
               controller: _salaryController,
               decoration: const InputDecoration(
-                labelText: 'Salary',
+                labelText: 'Salary *',
                 border: OutlineInputBorder(),
                 prefixText: '\$ ',
               ),
@@ -852,7 +1116,28 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
               validator: (value) {
                 if (value?.isEmpty ?? true) return 'Please enter salary';
                 if (double.tryParse(value!) == null) {
-                  return 'Please enter valid number';
+                  return 'Please enter valid salary';
+                }
+                if (double.parse(value) < 0) {
+                  return 'Salary cannot be negative';
+                }
+                return null;
+              },
+            ),
+            const SizedBox(height: 16),
+            TextFormField(
+              controller: _joinDateController,
+              decoration: InputDecoration(
+                labelText: 'Join Date *',
+                border: const OutlineInputBorder(),
+                suffixIcon: const Icon(Icons.calendar_today),
+                helperText: 'Select the date when employee joined',
+              ),
+              readOnly: true,
+              onTap: () => _selectJoinDate(context),
+              validator: (value) {
+                if (value == null || value.isEmpty) {
+                  return 'Please select join date';
                 }
                 return null;
               },

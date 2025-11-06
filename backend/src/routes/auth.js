@@ -238,6 +238,7 @@ router.post('/login', loginValidation, async (req, res) => {
           name: user.name,
           role: user.role,
           organizationId: user.organization_id,
+          organizationName: user.organization?.name || null, // Include organization name directly
           isSuperAdmin: user.is_super_admin,
           organization: user.organization ? {
             id: user.organization.id,

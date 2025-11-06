@@ -93,6 +93,7 @@ class AuthService {
           orElse: () => UserRole.employee,
         ),
         organizationId: userData['organizationId'] ?? '',
+        organizationName: userData['organizationName'] ?? userData['organization']?['name'],
         isSuperAdmin: userData['isSuperAdmin'] ?? false,
       );
 

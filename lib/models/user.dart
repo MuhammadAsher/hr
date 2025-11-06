@@ -6,6 +6,7 @@ class User {
   final String name;
   final UserRole role;
   final String organizationId; // Link to organization
+  final String? organizationName; // Organization name (optional, for display)
   final bool isSuperAdmin; // Platform super admin (for your company)
 
   User({
@@ -14,6 +15,7 @@ class User {
     required this.name,
     required this.role,
     required this.organizationId,
+    this.organizationName,
     this.isSuperAdmin = false,
   });
 
@@ -24,6 +26,7 @@ class User {
       'name': name,
       'role': role.name,
       'organizationId': organizationId,
+      'organizationName': organizationName,
       'isSuperAdmin': isSuperAdmin,
     };
   }
@@ -38,6 +41,7 @@ class User {
         orElse: () => UserRole.employee,
       ),
       organizationId: json['organizationId'] as String? ?? '',
+      organizationName: json['organizationName'] as String?,
       isSuperAdmin: json['isSuperAdmin'] as bool? ?? false,
     );
   }

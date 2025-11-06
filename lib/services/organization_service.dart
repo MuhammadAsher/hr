@@ -1,6 +1,9 @@
 import '../models/organization.dart';
+import 'api_client.dart';
 
 class OrganizationService {
+  final ApiClient _apiClient = ApiClient();
+  
   // Mock data storage - In production, this would be a database
   static final List<Organization> _organizations = [
     Organization(
@@ -59,11 +62,31 @@ class OrganizationService {
 
   // Get organization by ID
   Future<Organization?> getOrganizationById(String id) async {
-    await Future.delayed(const Duration(milliseconds: 300));
     try {
-      return _organizations.firstWhere((org) => org.id == id);
+      // Try API first
+      final response = await _apiClient.get('/organizations/$id');
+      
+      if (response.isSuccess) {
+        final orgData = response.data['data'];
+        return Organization.fromJson(orgData);
+      } else {
+        // Fallback to mock data if API fails
+        await Future.delayed(const Duration(milliseconds: 300));
+        try {
+          return _organizations.firstWhere((org) => org.id == id);
+        } catch (e) {
+          return null;
+        }
+      }
     } catch (e) {
-      return null;
+      // Fallback to mock data if API fails
+      print('❌ Failed to fetch organization from API: $e');
+      await Future.delayed(const Duration(milliseconds: 300));
+      try {
+        return _organizations.firstWhere((org) => org.id == id);
+      } catch (e) {
+        return null;
+      }
     }
   }
 
