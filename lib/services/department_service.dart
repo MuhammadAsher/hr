@@ -29,8 +29,8 @@ class DepartmentService {
       );
 
       if (response.isSuccess) {
-        final responseData = response.data['data'];
-        final List<dynamic> departments = responseData['departments'] ?? [];
+        // API returns: { data: [...], total: count, page, limit, totalPages }
+        final List<dynamic> departments = response.data['data'] ?? [];
         return departments.map((json) => Department.fromJson(json)).toList();
       } else {
         throw Exception(response.message ?? 'Failed to fetch departments');
@@ -67,13 +67,19 @@ class DepartmentService {
     try {
       final body = <String, dynamic>{'name': name};
 
-      if (description != null) body['description'] = description;
-      if (managerId != null) body['managerId'] = managerId;
+      if (description != null && description.isNotEmpty) {
+        body['description'] = description;
+      }
+      // Only include managerId if it's a valid UUID (not empty string)
+      if (managerId != null && managerId.isNotEmpty) {
+        body['managerId'] = managerId;
+      }
       if (budget != null) body['budget'] = budget;
 
       final response = await _apiClient.post('/departments', body: body);
       return response.isSuccess;
     } catch (e) {
+      print('❌ Failed to create department: $e');
       return false;
     }
   }
@@ -217,7 +223,9 @@ class DepartmentService {
     return await createDepartment(
       name: department.name,
       description: department.description,
-      managerId: department.managerId,
+      managerId: (department.managerId != null && department.managerId!.isNotEmpty) 
+          ? department.managerId 
+          : null,
     );
   }
 

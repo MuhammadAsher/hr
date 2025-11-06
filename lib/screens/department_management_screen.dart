@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/department.dart';
 import '../models/employee.dart';
 import '../services/department_service.dart';
-import '../services/employee_service.dart';
+import '../services/api_employee_service.dart';
 
 class DepartmentManagementScreen extends StatefulWidget {
   const DepartmentManagementScreen({super.key});
@@ -15,7 +15,7 @@ class DepartmentManagementScreen extends StatefulWidget {
 class _DepartmentManagementScreenState
     extends State<DepartmentManagementScreen> {
   final DepartmentService _departmentService = DepartmentService();
-  final EmployeeService _employeeService = EmployeeService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
   List<Department> _departments = [];
   List<Department> _filteredDepartments = [];
   bool _isLoading = true;
@@ -59,7 +59,7 @@ class _DepartmentManagementScreenState
                   dept.description.toLowerCase().contains(
                     query.toLowerCase(),
                   ) ||
-                  dept.managerName.toLowerCase().contains(query.toLowerCase()),
+                  (dept.managerName?.toLowerCase() ?? '').contains(query.toLowerCase()),
             )
             .toList();
       }
@@ -251,7 +251,7 @@ class _DepartmentManagementScreenState
                                   ),
                                   const SizedBox(width: 4),
                                   Text(
-                                    'Manager: ${department.managerName}',
+                                    'Manager: ${department.managerName ?? 'No Manager'}',
                                     style: TextStyle(
                                       fontSize: 12,
                                       color: Colors.grey[600],
@@ -363,7 +363,7 @@ class _DepartmentFormDialogState extends State<_DepartmentFormDialog> {
   final _descriptionController = TextEditingController();
   final _managerController = TextEditingController();
   final DepartmentService _departmentService = DepartmentService();
-  final EmployeeService _employeeService = EmployeeService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
 
   List<Employee> _employees = [];
   Employee? _selectedManager;
@@ -376,21 +376,38 @@ class _DepartmentFormDialogState extends State<_DepartmentFormDialog> {
     if (widget.department != null) {
       _nameController.text = widget.department!.name;
       _descriptionController.text = widget.department!.description;
-      _managerController.text = widget.department!.managerName;
+      _managerController.text = widget.department!.managerName ?? '';
     }
   }
 
   Future<void> _loadEmployees() async {
-    final employees = await _employeeService.getAllEmployees();
-    setState(() {
-      _employees = employees;
-      if (widget.department != null) {
-        _selectedManager = employees.firstWhere(
-          (emp) => emp.id == widget.department!.managerId,
-          orElse: () => employees.first,
-        );
-      }
-    });
+    try {
+      final employees = await _employeeService.getAllEmployees(
+        status: 'active',
+        limit: 100, // Get all active employees for manager selection
+      );
+      setState(() {
+        _employees = employees;
+        if (widget.department != null && 
+            widget.department!.managerId != null && 
+            widget.department!.managerId!.isNotEmpty) {
+          try {
+            _selectedManager = employees.firstWhere(
+              (emp) => emp.id == widget.department!.managerId,
+            );
+          } catch (e) {
+            _selectedManager = null; // Manager not found in current employees
+          }
+        } else {
+          _selectedManager = null; // No manager selected
+        }
+      });
+    } catch (e) {
+      print('❌ Failed to load employees: $e');
+      setState(() {
+        _employees = [];
+      });
+    }
   }
 
   @override
@@ -435,29 +452,44 @@ class _DepartmentFormDialogState extends State<_DepartmentFormDialog> {
                 },
               ),
               const SizedBox(height: 16),
+              // Manager dropdown (optional)
               DropdownButtonFormField<Employee>(
                 isExpanded: true,
-                initialValue: _selectedManager,
-                decoration: const InputDecoration(
-                  labelText: 'Manager',
-                  border: OutlineInputBorder(),
+                value: _selectedManager,
+                decoration: InputDecoration(
+                  labelText: 'Manager (Optional)',
+                  border: const OutlineInputBorder(),
+                  helperText: _employees.isEmpty 
+                      ? 'No employees available. You can add a manager later.'
+                      : 'Select a manager or leave empty',
                 ),
-                items: _employees.map((employee) {
-                  return DropdownMenuItem<Employee>(
-                    value: employee,
-                    child: Text(
-                      '${employee.name} (${employee.position})',
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                  );
-                }).toList(),
-                selectedItemBuilder: (context) {
-                  return _employees.map((employee) {
-                    return Text(
-                      '${employee.name} (${employee.position})',
-                      overflow: TextOverflow.ellipsis,
+                items: [
+                  // Add "None" option at the top
+                  const DropdownMenuItem<Employee>(
+                    value: null,
+                    child: Text('None (No Manager)'),
+                  ),
+                  // Add employee options
+                  ..._employees.map((employee) {
+                    return DropdownMenuItem<Employee>(
+                      value: employee,
+                      child: Text(
+                        '${employee.name} (${employee.position})',
+                        overflow: TextOverflow.ellipsis,
+                      ),
                     );
-                  }).toList();
+                  }),
+                ],
+                selectedItemBuilder: (context) {
+                  return [
+                    const Text('None (No Manager)'),
+                    ..._employees.map((employee) {
+                      return Text(
+                        '${employee.name} (${employee.position})',
+                        overflow: TextOverflow.ellipsis,
+                      );
+                    }),
+                  ];
                 },
                 onChanged: (Employee? value) {
                   setState(() {
@@ -465,12 +497,7 @@ class _DepartmentFormDialogState extends State<_DepartmentFormDialog> {
                     _managerController.text = value?.name ?? '';
                   });
                 },
-                validator: (value) {
-                  if (value == null) {
-                    return 'Please select a manager';
-                  }
-                  return null;
-                },
+                // Manager is optional - no validation needed
               ),
             ],
           ),
@@ -500,17 +527,24 @@ class _DepartmentFormDialogState extends State<_DepartmentFormDialog> {
 
     setState(() => _isLoading = true);
 
-    final department = Department(
-      id: widget.department?.id ?? _departmentService.generateDepartmentId(),
-      name: _nameController.text.trim(),
-      description: _descriptionController.text.trim(),
-      managerId: _selectedManager!.id,
-      managerName: _selectedManager!.name,
-      employeeCount: widget.department?.employeeCount ?? 0,
-    );
+    try {
+      final department = Department(
+        id: widget.department?.id ?? _departmentService.generateDepartmentId(),
+        name: _nameController.text.trim(),
+        description: _descriptionController.text.trim(),
+        managerId: _selectedManager?.id, // Can be null
+        managerName: _selectedManager?.name, // Can be null
+        employeeCount: widget.department?.employeeCount ?? 0,
+      );
 
-    widget.onSave(department);
-    Navigator.pop(context);
+      await widget.onSave(department);
+      if (mounted) {
+        Navigator.pop(context);
+      }
+    } catch (e) {
+      print('❌ Error saving department: $e');
+      setState(() => _isLoading = false);
+    }
   }
 
   @override
@@ -647,7 +681,7 @@ class _DepartmentDetailsSheetState extends State<_DepartmentDetailsSheet> {
                                 ),
                               ),
                               Text(
-                                widget.department.managerName,
+                                widget.department.managerName ?? 'No Manager',
                                 style: const TextStyle(
                                   fontWeight: FontWeight.bold,
                                 ),

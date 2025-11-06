@@ -1,7 +1,8 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { Op } = require('sequelize');
-const { Employee, User, Organization } = require('../models');
+const { Employee, User, Organization, Department } = require('../models');
+const { sequelize } = require('../database/connection');
 const {
   authenticateToken,
   requireAdmin,
@@ -24,7 +25,20 @@ router.use(authenticateToken);
 const createDepartmentValidation = [
   body('name').trim().isLength({ min: 2, max: 100 }).withMessage('Department name must be 2-100 characters'),
   body('description').optional().trim().isLength({ max: 500 }).withMessage('Description must be less than 500 characters'),
-  body('managerId').optional().isUUID().withMessage('Valid manager ID required'),
+  body('managerId')
+    .optional({ nullable: true, checkFalsy: true })
+    .custom((value) => {
+      if (!value || value === '' || value === null || value === undefined) {
+        return true; // Allow null/empty
+      }
+      // Check if it's a valid UUID
+      const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+      if (!uuidRegex.test(String(value))) {
+        throw new Error('Manager ID must be a valid UUID');
+      }
+      return true;
+    })
+    .withMessage('Valid manager ID (UUID) required'),
   body('budget').optional().isNumeric().isFloat({ min: 0 }).withMessage('Budget must be a positive number'),
 ];
 
@@ -104,25 +118,83 @@ const updateDepartmentValidation = [
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 // Get all departments
-router.get('/', async (req, res) => {
+router.get('/', addOrganizationFilter, async (req, res) => {
   try {
-    // TODO: Implement department listing with search and filtering
+    const page = parseInt(req.query.page) || 1;
+    const limit = parseInt(req.query.limit) || 10;
+    const search = req.query.search || '';
+    const status = req.query.status || 'active';
+    const offset = (page - 1) * limit;
+
+    const whereClause = { ...req.organizationFilter };
+
+    // Add status filter
+    if (status !== 'all') {
+      whereClause.status = status;
+    }
+
+    // Add search filter (SQLite compatible - use LOWER for case-insensitive)
+    if (search) {
+      const searchLower = search.toLowerCase();
+      whereClause[Op.or] = [
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('name')), { [Op.like]: `%${searchLower}%` }),
+        sequelize.where(sequelize.fn('LOWER', sequelize.col('description')), { [Op.like]: `%${searchLower}%` }),
+      ];
+    }
+
+    const { count, rows } = await Department.findAndCountAll({
+      where: whereClause,
+      limit,
+      offset,
+      order: [['name', 'ASC']],
+      include: [
+        {
+          model: Employee,
+          as: 'manager',
+          attributes: ['id', 'name', 'email', 'position'],
+          required: false,
+        },
+      ],
+    });
+
+    // Count employees in each department
+    const departmentsWithCounts = await Promise.all(
+      rows.map(async (dept) => {
+        const employeeCount = await Employee.count({
+          where: {
+            organization_id: dept.organization_id,
+            department: dept.name,
+            status: 'active',
+          },
+        });
+
+        const deptJson = dept.toJSON();
+        return {
+          ...deptJson,
+          employeeCount,
+          managerId: dept.manager_id,
+          managerName: dept.manager?.name || null,
+        };
+      })
+    );
+
     res.status(200).json({
-      status: true,
-      message: 'Department listing - Ready for implementation',
-      data: {
-        departments: [],
-        pagination: {
-          page: parseInt(req.query.page) || 1,
-          limit: parseInt(req.query.limit) || 10,
-          total: 0,
-          totalPages: 0
-        }
-      }
+      data: departmentsWithCounts,
+      total: count,
+      page,
+      limit,
+      totalPages: Math.ceil(count / limit),
     });
   } catch (error) {
     console.error('Get departments error:', error);
-    res.error('Failed to fetch departments', 500);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: `Failed to fetch departments: ${error.message}`,
+      code: 500,
+    });
   }
 });
 
@@ -173,7 +245,7 @@ router.get('/', async (req, res) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 // Get department by ID
-router.get('/:departmentId', param('departmentId').isUUID(), async (req, res) => {
+router.get('/:departmentId', addOrganizationFilter, param('departmentId').isUUID(), async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -185,15 +257,48 @@ router.get('/:departmentId', param('departmentId').isUUID(), async (req, res) =>
       });
     }
 
-    // TODO: Implement get department by ID with employees count
+    const { departmentId } = req.params;
+
+    const department = await Department.findOne({
+      where: {
+        id: departmentId,
+        ...req.organizationFilter,
+      },
+      include: [
+        {
+          model: Employee,
+          as: 'manager',
+          attributes: ['id', 'name', 'email', 'position'],
+          required: false,
+        },
+      ],
+    });
+
+    if (!department) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Department not found',
+        code: 404,
+      });
+    }
+
+    // Count employees in this department
+    const employeeCount = await Employee.count({
+      where: {
+        organization_id: department.organization_id,
+        department: department.name,
+        status: 'active',
+      },
+    });
+
+    const deptJson = department.toJSON();
     res.status(200).json({
       data: {
-        id: req.params.departmentId,
-        name: 'Sample Department',
-        description: 'Department description',
-        employeeCount: 0
+        ...deptJson,
+        employeeCount,
+        managerId: department.manager_id,
+        managerName: department.manager?.name || null,
       },
-      message: 'Department details - Ready for implementation'
     });
   } catch (error) {
     console.error('Get department error:', error);
@@ -279,7 +384,7 @@ router.get('/:departmentId', param('departmentId').isUUID(), async (req, res) =>
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 // Create new department (Admin only)
-router.post('/', requireAdmin, createDepartmentValidation, async (req, res) => {
+router.post('/', requireAdmin, addOrganizationFilter, createDepartmentValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
@@ -291,19 +396,107 @@ router.post('/', requireAdmin, createDepartmentValidation, async (req, res) => {
       });
     }
 
-    // TODO: Implement department creation
-    res.status(201).json({
-      message: 'Department created successfully - Ready for implementation',
-      data: {
-        id: 'temp-id',
-        name: req.body.name,
-        description: req.body.description || null,
-        managerId: req.body.managerId || null,
-        budget: req.body.budget || null
+    const organizationId = req.user.organization_id;
+    const { name, description, managerId, budget, location } = req.body;
+
+    // Check if department with same name already exists in organization
+    const existingDepartment = await Department.findOne({
+      where: {
+        name,
+        organization_id: organizationId,
+      },
+    });
+
+    if (existingDepartment) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: `A department with name "${name}" already exists in this organization`,
+        code: 409,
+      });
+    }
+
+    // Validate manager if provided
+    if (managerId) {
+      const manager = await Employee.findOne({
+        where: {
+          id: managerId,
+          organization_id: organizationId,
+          status: 'active',
+        },
+      });
+
+      if (!manager) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: 'Manager not found or inactive in this organization',
+          code: 400,
+        });
       }
+    }
+
+    // Create department
+    const department = await Department.create({
+      organization_id: organizationId,
+      name,
+      description: description || null,
+      manager_id: managerId || null,
+      budget: budget || null,
+      location: location || null,
+      status: 'active',
+    });
+
+    // Load department with manager info
+    const createdDepartment = await Department.findByPk(department.id, {
+      include: [
+        {
+          model: Employee,
+          as: 'manager',
+          attributes: ['id', 'name', 'email', 'position'],
+          required: false,
+        },
+      ],
+    });
+
+    // Count employees in this department (initially 0)
+    const employeeCount = 0;
+
+    const deptJson = createdDepartment.toJSON();
+    res.status(201).json({
+      data: {
+        ...deptJson,
+        employeeCount,
+        managerId: createdDepartment.manager_id,
+        managerName: createdDepartment.manager?.name || null,
+      },
+      message: 'Department created successfully',
     });
   } catch (error) {
     console.error('Create department error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
+
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: `A department with name "${req.body.name}" already exists in this organization`,
+        code: 409,
+      });
+    }
+
+    if (error.name === 'SequelizeValidationError') {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Invalid input data',
+        details: error.errors.map(err => ({
+          field: err.path,
+          message: err.message,
+        })),
+        code: 400,
+      });
+    }
+
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to create department',

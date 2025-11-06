@@ -166,12 +166,23 @@ async function startServer() {
     await sequelize.authenticate();
     console.log('✅ Database connection established successfully.');
     
-    // Validate database models (in development)
-    // Note: We use alter: false to avoid constraint issues. 
-    // Schema changes should be handled via migrations or manual SQL.
-    if (process.env.NODE_ENV === 'development') {
+    // Sync database models (create tables if they don't exist)
+    // Note: We use alter: false to avoid constraint issues during startup.
+    // For new models like Department, we need to create the table manually or use alter: true once.
+    try {
+      // Temporarily disable foreign keys for SQLite
+      await sequelize.query('PRAGMA foreign_keys = OFF;');
+      
+      // Sync all models (this will create Department table if it doesn't exist)
       await sequelize.sync({ alter: false });
-      console.log('✅ Database models validated.');
+      
+      // Re-enable foreign keys
+      await sequelize.query('PRAGMA foreign_keys = ON;');
+      
+      console.log('✅ Database models synchronized.');
+    } catch (syncError) {
+      console.warn('⚠️  Database sync warning:', syncError.message);
+      // Continue even if sync fails (table might already exist)
     }
     
     // Start server

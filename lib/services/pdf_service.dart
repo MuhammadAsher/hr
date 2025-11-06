@@ -405,7 +405,7 @@ class PdfService {
                     children: [
                       _buildTableCell(dept.name),
                       _buildTableCell(dept.description),
-                      _buildTableCell(dept.managerName),
+                      _buildTableCell(dept.managerName ?? 'N/A'),
                       _buildTableCell('${dept.employeeCount}'),
                     ],
                   ),

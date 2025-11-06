@@ -2,8 +2,8 @@ const { sequelize } = require('../database/connection');
 const Organization = require('./Organization');
 const User = require('./User');
 const Employee = require('./Employee');
+const Department = require('./Department');
 // Note: These models will be created next
-// const Department = require('./Department');
 // const LeaveRequest = require('./LeaveRequest');
 // const Attendance = require('./Attendance');
 // const Task = require('./Task');
@@ -55,6 +55,28 @@ function defineAssociations() {
     foreignKey: 'manager_id',
     as: 'subordinates',
   });
+
+  // Department associations
+  Organization.hasMany(Department, {
+    foreignKey: 'organization_id',
+    as: 'departments',
+    onDelete: 'CASCADE',
+  });
+
+  Department.belongsTo(Organization, {
+    foreignKey: 'organization_id',
+    as: 'organization',
+  });
+
+  Department.belongsTo(Employee, {
+    foreignKey: 'manager_id',
+    as: 'manager',
+  });
+
+  Employee.hasMany(Department, {
+    foreignKey: 'manager_id',
+    as: 'managedDepartments',
+  });
 }
 
 // Initialize associations
@@ -65,5 +87,6 @@ module.exports = {
   Organization,
   User,
   Employee,
+  Department,
   // Additional models will be added as we create them
 };

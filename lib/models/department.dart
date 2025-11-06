@@ -2,16 +2,16 @@ class Department {
   final String id;
   final String name;
   final String description;
-  final String managerId;
-  final String managerName;
+  final String? managerId; // Optional - manager can be null
+  final String? managerName; // Optional - manager can be null
   final int employeeCount;
 
   Department({
     required this.id,
     required this.name,
     required this.description,
-    required this.managerId,
-    required this.managerName,
+    this.managerId,
+    this.managerName,
     this.employeeCount = 0,
   });
 
@@ -28,12 +28,16 @@ class Department {
 
   factory Department.fromJson(Map<String, dynamic> json) {
     return Department(
-      id: json['id'] as String,
-      name: json['name'] as String,
-      description: json['description'] as String,
-      managerId: json['managerId'] as String,
-      managerName: json['managerName'] as String,
-      employeeCount: json['employeeCount'] as int? ?? 0,
+      id: json['id']?.toString() ?? '',
+      name: json['name']?.toString() ?? '',
+      description: json['description']?.toString() ?? '',
+      managerId: json['managerId']?.toString(),
+      managerName: json['managerName']?.toString(),
+      employeeCount: (json['employeeCount'] is int) 
+          ? json['employeeCount'] as int
+          : (json['employeeCount'] is String)
+              ? int.tryParse(json['employeeCount'] as String) ?? 0
+              : 0,
     );
   }
 
@@ -44,13 +48,15 @@ class Department {
     String? managerId,
     String? managerName,
     int? employeeCount,
+    bool? clearManagerId,
+    bool? clearManagerName,
   }) {
     return Department(
       id: id ?? this.id,
       name: name ?? this.name,
       description: description ?? this.description,
-      managerId: managerId ?? this.managerId,
-      managerName: managerName ?? this.managerName,
+      managerId: clearManagerId == true ? null : (managerId ?? this.managerId),
+      managerName: clearManagerName == true ? null : (managerName ?? this.managerName),
       employeeCount: employeeCount ?? this.employeeCount,
     );
   }
