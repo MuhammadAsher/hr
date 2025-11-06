@@ -114,54 +114,53 @@ router.post('/login', loginValidation, async (req, res) => {
 
     const { email, password, role } = req.body;
 
+    // Normalize email for comparison (express-validator already normalizes, but be safe)
+    const normalizedEmail = email.toLowerCase().trim();
+    const superAdminEmail = process.env.SUPER_ADMIN_EMAIL ? process.env.SUPER_ADMIN_EMAIL.toLowerCase().trim() : null;
+
     // Find user by email
     let user;
     
     try {
-      // Check for super admin first
-      if (email === process.env.SUPER_ADMIN_EMAIL) {
-        user = await User.findOne({
-          where: {
-            email,
-            is_super_admin: true,
-            is_active: true,
+      // First, try to find user by email (check if super admin or regular user)
+      // We'll check super admin status after finding the user
+      user = await User.findOne({
+        where: {
+          email: normalizedEmail,
+          is_active: true,
+        },
+        attributes: [
+          'id',
+          'organization_id',
+          'email',
+          'password_hash',
+          'name',
+          'role',
+          'is_super_admin',
+          'is_active',
+          'last_login',
+          'email_verified',
+          'profile_picture',
+          'reset_token',
+          'reset_token_expiry',
+          'created_at',
+          'updated_at',
+        ],
+        include: [
+          {
+            model: Organization,
+            as: 'organization',
+            attributes: ['id', 'name', 'is_active'],
+            required: false, // Left join - don't fail if org doesn't exist
           },
-        });
-      } else {
-        // Find regular user with optional organization association
-        // Explicitly specify all User attributes to avoid column reference issues
-        user = await User.findOne({
-          where: {
-            email,
-            role,
-            is_active: true,
-          },
-          attributes: [
-            'id',
-            'organization_id',
-            'email',
-            'password_hash',
-            'name',
-            'role',
-            'is_super_admin',
-            'is_active',
-            'last_login',
-            'email_verified',
-            'profile_picture',
-            'reset_token',
-            'reset_token_expiry',
-            'created_at',
-            'updated_at',
-          ],
-          include: [
-            {
-              model: Organization,
-              as: 'organization',
-              attributes: ['id', 'name', 'is_active'],
-              required: false, // Left join - don't fail if org doesn't exist
-            },
-          ],
-        });
+        ],
+      });
+
+      // If user found and is super admin, allow login regardless of role parameter
+      // If user is not super admin, verify role matches
+      if (user && !user.is_super_admin && user.role !== role) {
+        console.log(`❌ Role mismatch: user role=${user.role}, requested role=${role}`);
+        user = null; // Set to null so it triggers "Invalid credentials" below
       }
     } catch (dbError) {
       console.error('Database error during user lookup:', dbError);
@@ -171,11 +170,12 @@ router.post('/login', loginValidation, async (req, res) => {
     }
 
     if (!user) {
-      console.log(`❌ User not found: email=${email}, role=${role}`);
+      console.log(`❌ User not found: email=${normalizedEmail}, role=${role}`);
+      console.log(`   Searched for: email=${normalizedEmail}, is_active=true`);
       return res.unauthorized('Invalid credentials');
     }
     
-    console.log(`✅ User found: ${user.email}, role=${user.role}, is_active=${user.is_active}`);
+    console.log(`✅ User found: ${user.email}, role=${user.role}, is_super_admin=${user.is_super_admin}, is_active=${user.is_active}`);
 
     // Validate password
     let isValidPassword;

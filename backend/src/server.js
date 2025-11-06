@@ -54,9 +54,6 @@ app.use(responseFormatter);
 const { serve, setup } = require('./config/swagger');
 app.use('/api-docs', serve, setup);
 
-// Serve static files from public directory
-app.use(express.static('public'));
-
 // Logging middleware
 if (process.env.NODE_ENV !== 'test') {
   app.use(morgan('combined'));
@@ -106,7 +103,7 @@ app.get('/health', (req, res) => {
   }, 'Server is healthy');
 });
 
-// API routes
+// API routes (must come before static files)
 app.use('/api/v1/auth', authRoutes);
 app.use('/api/v1/organizations', organizationRoutes);
 app.use('/api/v1/employees', employeeRoutes);
@@ -116,6 +113,14 @@ app.use('/api/v1/tasks', taskRoutes);
 app.use('/api/v1/departments', departmentRoutes);
 app.use('/api/v1/payslips', payslipRoutes);
 app.use('/api/v1/reports', reportRoutes);
+
+// Serve static files from public directory (after API routes)
+app.use(express.static('public'));
+
+// Serve index.html for root route (super admin portal)
+app.get('/', (req, res) => {
+  res.sendFile('index.html', { root: 'public' });
+});
 
 // 404 handler
 app.use('*', (req, res) => {

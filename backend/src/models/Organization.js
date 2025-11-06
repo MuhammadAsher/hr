@@ -27,7 +27,17 @@ const Organization = sequelize.define('Organization', {
     type: DataTypes.STRING,
     allowNull: true,
     validate: {
-      len: [10, 20],
+      // Allow empty string or null, or string with at least 10 characters
+      isValidPhone(value) {
+        if (value === null || value === '' || value === undefined) {
+          return true;
+        }
+        if (typeof value !== 'string') {
+          return false;
+        }
+        const trimmed = value.trim();
+        return trimmed.length >= 10 && trimmed.length <= 50; // Increased max length for international formats
+      },
     },
   },
   address: {
@@ -68,7 +78,7 @@ const Organization = sequelize.define('Organization', {
     allowNull: false,
     defaultValue: 10,
     validate: {
-      min: 1,
+      min: -1, // -1 means unlimited
     },
   },
   settings: {
@@ -94,7 +104,19 @@ const Organization = sequelize.define('Organization', {
     type: DataTypes.STRING,
     allowNull: true,
     validate: {
-      isUrl: true,
+      // Allow empty string or null
+      isValidUrl(value) {
+        if (value === null || value === '' || value === undefined) {
+          return true;
+        }
+        // Basic URL validation
+        try {
+          new URL(value);
+          return true;
+        } catch {
+          return false;
+        }
+      },
     },
   },
 }, {

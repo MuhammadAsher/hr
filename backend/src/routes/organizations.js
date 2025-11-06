@@ -1,6 +1,8 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
-const { Organization, User } = require('../models');
+const { Organization, User, Employee } = require('../models');
+const { sequelize } = require('../database/connection');
+const { Op } = require('sequelize');
 const {
   authenticateToken,
   requireSuperAdmin,
@@ -16,7 +18,12 @@ router.use(authenticateToken);
 const createOrganizationValidation = [
   body('name').trim().isLength({ min: 2, max: 255 }).withMessage('Organization name must be 2-255 characters'),
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('phone').optional().isMobilePhone().withMessage('Valid phone number required'),
+  body('phone').optional().custom((value) => {
+    if (!value) return true; // Allow empty/null
+    if (typeof value !== 'string') return false;
+    // Allow any string with at least 10 characters (relaxed validation)
+    return value.trim().length >= 10;
+  }).withMessage('Phone number must be at least 10 characters'),
   body('address').optional().trim().isLength({ max: 500 }).withMessage('Address too long'),
   body('industry').trim().notEmpty().withMessage('Industry is required'),
   body('subscriptionPlan').optional().isIn(['Free', 'Basic', 'Premium', 'Enterprise']).withMessage('Invalid subscription plan'),
@@ -29,7 +36,12 @@ const updateOrganizationValidation = [
   param('organizationId').isUUID().withMessage('Valid organization ID required'),
   body('name').optional().trim().isLength({ min: 2, max: 255 }).withMessage('Organization name must be 2-255 characters'),
   body('email').optional().isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('phone').optional().isMobilePhone().withMessage('Valid phone number required'),
+  body('phone').optional().custom((value) => {
+    if (!value) return true; // Allow empty/null
+    if (typeof value !== 'string') return false;
+    // Allow any string with at least 10 characters (relaxed validation)
+    return value.trim().length >= 10;
+  }).withMessage('Phone number must be at least 10 characters'),
   body('address').optional().trim().isLength({ max: 500 }).withMessage('Address too long'),
   body('industry').optional().trim().notEmpty().withMessage('Industry cannot be empty'),
   body('subscriptionPlan').optional().isIn(['Free', 'Basic', 'Premium', 'Enterprise']).withMessage('Invalid subscription plan'),
@@ -45,11 +57,21 @@ router.get('/', requireSuperAdmin, async (req, res) => {
 
     const whereClause = {};
     if (search) {
-      const { Op } = require('sequelize');
+      // SQLite doesn't support iLike, so we use LIKE with lowercase conversion
+      const searchLower = search.toLowerCase();
       whereClause[Op.or] = [
-        { name: { [Op.iLike]: `%${search}%` } },
-        { email: { [Op.iLike]: `%${search}%` } },
-        { industry: { [Op.iLike]: `%${search}%` } },
+        sequelize.where(
+          sequelize.fn('LOWER', sequelize.col('name')),
+          { [Op.like]: `%${searchLower}%` }
+        ),
+        sequelize.where(
+          sequelize.fn('LOWER', sequelize.col('email')),
+          { [Op.like]: `%${searchLower}%` }
+        ),
+        sequelize.where(
+          sequelize.fn('LOWER', sequelize.col('industry')),
+          { [Op.like]: `%${searchLower}%` }
+        ),
       ];
     }
 
@@ -180,8 +202,8 @@ router.post('/', requireSuperAdmin, createOrganizationValidation, async (req, re
   }
 });
 
-// Get organization by ID
-router.get('/:organizationId', requireOrganizationAccess(), async (req, res) => {
+// Get organization by ID (Super Admin only)
+router.get('/:organizationId', requireSuperAdmin, async (req, res) => {
   try {
     const { organizationId } = req.params;
 
@@ -216,17 +238,25 @@ router.get('/:organizationId', requireOrganizationAccess(), async (req, res) => 
   }
 });
 
-// Update organization
-router.put('/:organizationId', requireOrganizationAccess(), updateOrganizationValidation, async (req, res) => {
+// Update organization (Super Admin only)
+router.put('/:organizationId', requireSuperAdmin, updateOrganizationValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
-      return res.status(400).json({
-        error: 'Validation Error',
-        message: 'Invalid input data',
-        code: 400,
-        details: errors.array(),
-      });
+      // Filter out errors for fields that weren't provided (only validate provided fields)
+      const providedFields = Object.keys(req.body);
+      const relevantErrors = errors.array().filter(error => 
+        providedFields.includes(error.path) || error.path === 'organizationId'
+      );
+      
+      if (relevantErrors.length > 0) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: 'Invalid input data',
+          code: 400,
+          details: relevantErrors,
+        });
+      }
     }
 
     const { organizationId } = req.params;
@@ -241,15 +271,42 @@ router.put('/:organizationId', requireOrganizationAccess(), updateOrganizationVa
       });
     }
 
+    // Only update fields that are explicitly provided (partial update support)
+    const fieldsToUpdate = {};
+    
     // Update subscription plan limits if changed
     if (updateData.subscriptionPlan && updateData.subscriptionPlan !== organization.subscription_plan) {
       const limits = Organization.getSubscriptionLimits();
-      updateData.employee_limit = limits[updateData.subscriptionPlan].employees;
-      updateData.subscription_plan = updateData.subscriptionPlan;
-      delete updateData.subscriptionPlan;
+      if (!limits[updateData.subscriptionPlan]) {
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: `Invalid subscription plan: ${updateData.subscriptionPlan}`,
+          code: 400,
+        });
+      }
+      fieldsToUpdate.employee_limit = limits[updateData.subscriptionPlan].employees;
+      fieldsToUpdate.subscription_plan = updateData.subscriptionPlan;
+    }
+    
+    // Only include other fields if they are explicitly provided in the request
+    if (updateData.name !== undefined) fieldsToUpdate.name = updateData.name;
+    if (updateData.email !== undefined) fieldsToUpdate.email = updateData.email;
+    if (updateData.phone !== undefined) fieldsToUpdate.phone = updateData.phone || null;
+    if (updateData.address !== undefined) fieldsToUpdate.address = updateData.address || null;
+    if (updateData.industry !== undefined) fieldsToUpdate.industry = updateData.industry;
+    if (updateData.taxId !== undefined) fieldsToUpdate.tax_id = updateData.taxId || null;
+    if (updateData.website !== undefined) fieldsToUpdate.website = updateData.website || null;
+
+    // Check if there are any fields to update
+    if (Object.keys(fieldsToUpdate).length === 0) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'No fields provided to update',
+        code: 400,
+      });
     }
 
-    await organization.update(updateData);
+    await organization.update(fieldsToUpdate);
 
     res.status(200).json({
       data: organization,
@@ -257,9 +314,120 @@ router.put('/:organizationId', requireOrganizationAccess(), updateOrganizationVa
     });
   } catch (error) {
     console.error('Update organization error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
+    console.error('Organization ID:', req.params.organizationId);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to update organization';
+    if (error.name === 'SequelizeValidationError') {
+      errorMessage = `Validation error: ${error.errors.map(e => e.message).join(', ')}`;
+    } else if (error.name === 'SequelizeUniqueConstraintError') {
+      errorMessage = `Unique constraint violation: ${error.errors.map(e => e.message).join(', ')}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
     res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Failed to update organization',
+      message: errorMessage,
+      code: 500,
+    });
+  }
+});
+
+// Delete organization (Super Admin only)
+router.delete('/:organizationId', requireSuperAdmin, async (req, res) => {
+  const transaction = await sequelize.transaction();
+  try {
+    const { organizationId } = req.params;
+
+    const organization = await Organization.findByPk(organizationId, { transaction });
+    if (!organization) {
+      await transaction.rollback();
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Organization not found',
+        code: 404,
+      });
+    }
+
+    // Manually delete related records in correct order to avoid foreign key issues
+    // 1. Delete employees first (they reference users)
+    await Employee.destroy({
+      where: { organization_id: organizationId },
+      transaction,
+    });
+
+    // 2. Delete users (they reference organization)
+    await User.destroy({
+      where: { organization_id: organizationId },
+      transaction,
+    });
+
+    // 3. Finally delete the organization
+    await organization.destroy({ transaction });
+
+    await transaction.commit();
+
+    res.status(200).json({
+      data: {},
+      message: 'Organization deleted successfully',
+    });
+  } catch (error) {
+    await transaction.rollback();
+    console.error('Delete organization error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Organization ID:', req.params.organizationId);
+    
+    // Provide more specific error messages
+    let errorMessage = 'Failed to delete organization';
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      errorMessage = 'Cannot delete organization: Related records exist';
+    } else if (error.name === 'SequelizeDatabaseError') {
+      errorMessage = `Database error: ${error.message}`;
+    } else if (error.message) {
+      errorMessage = error.message;
+    }
+    
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: errorMessage,
+      code: 500,
+    });
+  }
+});
+
+// Toggle organization active status (Super Admin only)
+router.patch('/:organizationId/toggle-status', requireSuperAdmin, async (req, res) => {
+  try {
+    const { organizationId } = req.params;
+
+    const organization = await Organization.findByPk(organizationId);
+    if (!organization) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Organization not found',
+        code: 404,
+      });
+    }
+
+    // Toggle active status
+    await organization.update({ is_active: !organization.is_active });
+
+    res.status(200).json({
+      data: organization,
+      message: `Organization ${organization.is_active ? 'activated' : 'deactivated'} successfully`,
+    });
+  } catch (error) {
+    console.error('Toggle organization status error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to toggle organization status',
       code: 500,
     });
   }

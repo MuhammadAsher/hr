@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Platform - Super Admin Portal</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+    <!-- Login Screen -->
+    <div id="loginScreen" class="screen active">
+        <div class="login-wrapper">
+            <div class="login-left">
+                <div class="login-brand">
+                    <div class="brand-logo">
+                        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="48" height="48" rx="12" fill="#2563eb"/>
+                            <path d="M24 14L32 20V28C32 32.4183 28.4183 36 24 36C19.5817 36 16 32.4183 16 28V20L24 14Z" fill="white"/>
+                            <circle cx="24" cy="26" r="4" fill="#2563eb"/>
+                        </svg>
+                    </div>
+                    <h1>HR Platform</h1>
+                    <p class="brand-subtitle">Super Admin Portal</p>
+                </div>
+                <div class="login-features">
+                    <div class="feature-item">
+                        <div class="feature-icon">🏢</div>
+                        <div class="feature-text">
+                            <h3>Organization Management</h3>
+                            <p>Create and manage multiple organizations</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">👥</div>
+                        <div class="feature-text">
+                            <h3>User Administration</h3>
+                            <p>Monitor and control user access</p>
+                        </div>
+                    </div>
+                    <div class="feature-item">
+                        <div class="feature-icon">📊</div>
+                        <div class="feature-text">
+                            <h3>Analytics & Reports</h3>
+                            <p>Track platform usage and statistics</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="login-right">
+                <div class="login-card">
+                    <div class="login-header">
+                        <h2>Welcome Back</h2>
+                        <p>Sign in to your super admin account</p>
+                    </div>
+                    <form id="loginForm" class="login-form">
+                        <div class="form-group">
+                            <label for="email">Email Address</label>
+                            <div class="input-wrapper">
+                                <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M2.5 6.66667L10 11.6667L17.5 6.66667M3.33333 15H16.6667C17.5871 15 18.3333 14.2538 18.3333 13.3333V6.66667C18.3333 5.74619 17.5871 5 16.6667 5H3.33333C2.41286 5 1.66667 5.74619 1.66667 6.66667V13.3333C1.66667 14.2538 2.41286 15 3.33333 15Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <input type="email" id="email" name="email" required placeholder="superadmin@hrplatform.com" autocomplete="email">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="password">Password</label>
+                            <div class="input-wrapper">
+                                <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M15.8333 9.16667H4.16667C3.24619 9.16667 2.5 9.91286 2.5 10.8333V16.6667C2.5 17.5871 3.24619 18.3333 4.16667 18.3333H15.8333C16.7538 18.3333 17.5 17.5871 17.5 16.6667V10.8333C17.5 9.91286 16.7538 9.16667 15.8333 9.16667Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                    <path d="M5.83333 9.16667V5.83333C5.83333 4.72826 6.27232 3.66846 7.05372 2.88706C7.83512 2.10565 8.89493 1.66667 10 1.66667C11.1051 1.66667 12.1649 2.10565 12.9463 2.88706C13.7277 3.66846 14.1667 4.72826 14.1667 5.83333V9.16667" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                                </svg>
+                                <input type="password" id="password" name="password" required placeholder="Enter your password" autocomplete="current-password">
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="role">Role</label>
+                            <div class="input-wrapper">
+                                <svg class="input-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                    <path d="M10 10C12.7614 10 15 7.76142 15 5C15 2.23858 12.7614 0 10 0C7.23858 0 5 2.23858 5 5C5 7.76142 7.23858 10 10 10Z" fill="currentColor"/>
+                                    <path d="M10 12.5C5.58172 12.5 2 14.5744 2 17.2222V20H18V17.2222C18 14.5744 14.4183 12.5 10 12.5Z" fill="currentColor"/>
+                                </svg>
+                                <select id="role" name="role" required>
+                                    <option value="admin">Admin</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div id="loginError" class="error-message"></div>
+                        <button type="submit" class="btn btn-primary btn-block btn-lg">
+                            <span>Sign In</span>
+                            <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Dashboard Screen -->
+    <div id="dashboardScreen" class="screen">
+        <div class="dashboard-wrapper">
+            <!-- Sidebar -->
+            <aside class="sidebar">
+                <div class="sidebar-header">
+                    <div class="sidebar-logo">
+                        <svg width="32" height="32" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <rect width="48" height="48" rx="12" fill="#2563eb"/>
+                            <path d="M24 14L32 20V28C32 32.4183 28.4183 36 24 36C19.5817 36 16 32.4183 16 28V20L24 14Z" fill="white"/>
+                            <circle cx="24" cy="26" r="4" fill="#2563eb"/>
+                        </svg>
+                        <span>HR Platform</span>
+                    </div>
+                </div>
+                <nav class="sidebar-nav">
+                    <a href="#" class="nav-item active">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M3.33333 10L8.33333 15L16.6667 6.66667" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <span>Organizations</span>
+                    </a>
+                </nav>
+                <div class="sidebar-footer">
+                    <div class="user-profile">
+                        <div class="user-avatar">
+                            <span id="userInitials">SA</span>
+                        </div>
+                        <div class="user-info">
+                            <div class="user-name" id="sidebarUserName">Super Admin</div>
+                            <div class="user-role">Administrator</div>
+                        </div>
+                    </div>
+                    <button id="logoutBtn" class="btn-logout">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7.5 17.5H4.16667C3.24619 17.5 2.5 16.7538 2.5 15.8333V4.16667C2.5 3.24619 3.24619 2.5 4.16667 2.5H7.5M13.3333 14.1667L17.5 10M17.5 10L13.3333 5.83333M17.5 10H7.5" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </aside>
+
+            <!-- Main Content -->
+            <main class="main-content">
+                <!-- Top Header -->
+                <header class="top-header">
+                    <div class="header-left">
+                        <h1 class="page-title">Organizations</h1>
+                        <p class="page-subtitle">Manage all organizations on the platform</p>
+                    </div>
+                    <button id="createOrgBtn" class="btn btn-primary">
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M10 4.16667V15.8333M4.16667 10H15.8333" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                        </svg>
+                        <span>Create Organization</span>
+                    </button>
+                </header>
+
+                <!-- Stats Cards -->
+                <div class="stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-primary">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M19 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H19C19.5304 3 20.0391 3.21071 20.4142 3.58579C20.7893 3.96086 21 4.46957 21 5V19C21 19.5304 20.7893 20.0391 20.4142 20.4142C20.0391 20.7893 19.5304 21 19 21Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                                <path d="M9 7H15M9 12H15M9 17H13" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalOrganizations">0</div>
+                            <div class="stat-label">Total Organizations</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-success">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M9 12L11 14L15 10M21 12C21 16.9706 16.9706 21 12 21C7.02944 21 3 16.9706 3 12C3 7.02944 7.02944 3 12 3C16.9706 3 21 7.02944 21 12Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="activeOrganizations">0</div>
+                            <div class="stat-label">Active Organizations</div>
+                        </div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-icon stat-icon-info">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M17 21V19C17 17.9391 16.5786 16.9217 15.8284 16.1716C15.0783 15.4214 14.0609 15 13 15H5C3.93913 15 2.92172 15.4214 2.17157 16.1716C1.42143 16.9217 1 17.9391 1 19V21M23 21V19C22.9993 18.1137 22.7044 17.2528 22.1614 16.5523C21.6184 15.8519 20.8581 15.3516 20 15.13M16 3.13C16.8604 3.35031 17.623 3.85071 18.1676 4.55232C18.7122 5.25392 19.0078 6.11683 19.0078 7.005C19.0078 7.89318 18.7122 8.75608 18.1676 9.45769C17.623 10.1593 16.8604 10.6597 16 10.88M13 7C13 9.20914 11.2091 11 9 11C6.79086 11 5 9.20914 5 7C5 4.79086 6.79086 3 9 3C11.2091 3 13 4.79086 13 7Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                            </svg>
+                        </div>
+                        <div class="stat-content">
+                            <div class="stat-value" id="totalUsers">-</div>
+                            <div class="stat-label">Total Users</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Filters and Search -->
+                <div class="filters-bar">
+                    <div class="search-box">
+                        <svg class="search-icon" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M9.16667 15.8333C12.8486 15.8333 15.8333 12.8486 15.8333 9.16667C15.8333 5.48477 12.8486 2.5 9.16667 2.5C5.48477 2.5 2.5 5.48477 2.5 9.16667C2.5 12.8486 5.48477 15.8333 9.16667 15.8333Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                            <path d="M17.5 17.5L13.875 13.875" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                        <input type="text" id="searchInput" placeholder="Search organizations by name, email, or industry...">
+                    </div>
+                </div>
+
+                <!-- Organizations Table -->
+                <div class="table-card">
+                    <div class="table-wrapper">
+                        <table class="data-table">
+                            <thead>
+                                <tr>
+                                    <th>Organization</th>
+                                    <th>Industry</th>
+                                    <th>Plan</th>
+                                    <th>Status</th>
+                                    <th>Created</th>
+                                    <th>Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="organizationsTableBody">
+                                <tr>
+                                    <td colspan="6" class="table-loading">
+                                        <div class="loading-spinner"></div>
+                                        <span>Loading organizations...</span>
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                    <div class="table-footer">
+                        <div class="pagination-info">
+                            <span id="paginationInfo">Showing 0 - 0 of 0</span>
+                        </div>
+                        <div class="pagination" id="pagination"></div>
+                    </div>
+                </div>
+            </main>
+        </div>
+    </div>
+
+    <!-- Create Organization Modal -->
+    <div id="createOrgModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Create New Organization</h2>
+                <button class="modal-close" id="closeCreateModal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="createOrgForm" class="modal-form">
+                <div class="form-section">
+                    <h3 class="form-section-title">Organization Details</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="orgName">Organization Name <span class="required">*</span></label>
+                            <input type="text" id="orgName" name="name" required placeholder="Enter organization name">
+                        </div>
+                        <div class="form-group">
+                            <label for="orgEmail">Organization Email <span class="required">*</span></label>
+                            <input type="email" id="orgEmail" name="email" required placeholder="contact@organization.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="orgPhone">Phone</label>
+                            <input type="text" id="orgPhone" name="phone" placeholder="+1 (555) 000-0000">
+                        </div>
+                        <div class="form-group">
+                            <label for="orgIndustry">Industry <span class="required">*</span></label>
+                            <input type="text" id="orgIndustry" name="industry" required placeholder="e.g., Technology, Healthcare">
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label for="orgAddress">Address</label>
+                            <textarea id="orgAddress" name="address" rows="2" placeholder="Enter organization address"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="subscriptionPlan">Subscription Plan <span class="required">*</span></label>
+                            <select id="subscriptionPlan" name="subscriptionPlan" required>
+                                <option value="Free">Free</option>
+                                <option value="Basic">Basic</option>
+                                <option value="Premium">Premium</option>
+                                <option value="Enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="taxId">Tax ID</label>
+                            <input type="text" id="taxId" name="taxId" placeholder="Optional">
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label for="website">Website</label>
+                            <input type="url" id="website" name="website" placeholder="https://www.organization.com">
+                        </div>
+                    </div>
+                </div>
+                <div class="form-section">
+                    <h3 class="form-section-title">Admin User Details</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="adminName">Admin Name <span class="required">*</span></label>
+                            <input type="text" id="adminName" name="adminName" required placeholder="John Doe">
+                        </div>
+                        <div class="form-group">
+                            <label for="adminEmail">Admin Email <span class="required">*</span></label>
+                            <input type="email" id="adminEmail" name="adminEmail" required placeholder="admin@organization.com">
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label for="adminPassword">Admin Password <span class="required">*</span></label>
+                            <input type="password" id="adminPassword" name="adminPassword" required minlength="6" placeholder="Minimum 6 characters">
+                        </div>
+                    </div>
+                </div>
+                <div id="createOrgError" class="error-message"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelCreateBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span>Create Organization</span>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- View Organization Modal -->
+    <div id="viewOrgModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container modal-container-large">
+            <div class="modal-header">
+                <h2>Organization Details</h2>
+                <button class="modal-close" id="closeViewModal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div id="orgDetails" class="org-details">
+                <!-- Details will be loaded here -->
+            </div>
+            <div class="modal-actions" id="viewOrgActions">
+                <!-- Action buttons will be added here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Organization Modal -->
+    <div id="editOrgModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Edit Organization</h2>
+                <button class="modal-close" id="closeEditModal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <form id="editOrgForm" class="modal-form">
+                <input type="hidden" id="editOrgId" name="orgId">
+                <div class="form-section">
+                    <h3 class="form-section-title">Organization Details</h3>
+                    <div class="form-grid">
+                        <div class="form-group">
+                            <label for="editOrgName">Organization Name <span class="required">*</span></label>
+                            <input type="text" id="editOrgName" name="name" required placeholder="Enter organization name">
+                        </div>
+                        <div class="form-group">
+                            <label for="editOrgEmail">Organization Email <span class="required">*</span></label>
+                            <input type="email" id="editOrgEmail" name="email" required placeholder="contact@organization.com">
+                        </div>
+                        <div class="form-group">
+                            <label for="editOrgPhone">Phone</label>
+                            <input type="text" id="editOrgPhone" name="phone" placeholder="+1 (555) 000-0000">
+                        </div>
+                        <div class="form-group">
+                            <label for="editOrgIndustry">Industry <span class="required">*</span></label>
+                            <input type="text" id="editOrgIndustry" name="industry" required placeholder="e.g., Technology, Healthcare">
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label for="editOrgAddress">Address</label>
+                            <textarea id="editOrgAddress" name="address" rows="2" placeholder="Enter organization address"></textarea>
+                        </div>
+                        <div class="form-group">
+                            <label for="editSubscriptionPlan">Subscription Plan <span class="required">*</span></label>
+                            <select id="editSubscriptionPlan" name="subscriptionPlan" required>
+                                <option value="Free">Free</option>
+                                <option value="Basic">Basic</option>
+                                <option value="Premium">Premium</option>
+                                <option value="Enterprise">Enterprise</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="editTaxId">Tax ID</label>
+                            <input type="text" id="editTaxId" name="taxId" placeholder="Optional">
+                        </div>
+                        <div class="form-group form-group-full">
+                            <label for="editWebsite">Website</label>
+                            <input type="url" id="editWebsite" name="website" placeholder="https://www.organization.com">
+                        </div>
+                    </div>
+                </div>
+                <div id="editOrgError" class="error-message"></div>
+                <div class="modal-actions">
+                    <button type="button" class="btn btn-secondary" id="cancelEditBtn">Cancel</button>
+                    <button type="submit" class="btn btn-primary">
+                        <span>Update Organization</span>
+                        <svg width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
+                            <path d="M7.5 15L12.5 10L7.5 5" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                        </svg>
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Change Plan Modal -->
+    <div id="changePlanModal" class="modal">
+        <div class="modal-overlay"></div>
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>Change Subscription Plan</h2>
+                <button class="modal-close" id="closeChangePlanModal">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                        <path d="M18 6L6 18M6 6L18 18" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+            </div>
+            <div class="modal-content">
+                <p style="margin-bottom: 24px; color: var(--text-secondary);">Select a new subscription plan for this organization:</p>
+                <div id="planOptions" class="plan-options">
+                    <!-- Plan options will be loaded here -->
+                </div>
+                <div id="changePlanError" class="error-message"></div>
+            </div>
+            <div class="modal-actions">
+                <button type="button" class="btn btn-secondary" id="cancelChangePlanBtn">Cancel</button>
+                <button type="button" class="btn btn-primary" id="confirmChangePlanBtn">
+                    <span>Update Plan</span>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script src="app.js"></script>
+</body>
+</html>
