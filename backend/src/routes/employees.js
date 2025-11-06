@@ -2,6 +2,7 @@ const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { Op } = require('sequelize');
 const { Employee, User, Organization } = require('../models');
+const { sequelize } = require('../database/connection');
 const {
   authenticateToken,
   requireAdmin,
@@ -24,11 +25,21 @@ router.use(authenticateToken);
 const createEmployeeValidation = [
   body('name').trim().isLength({ min: 2, max: 255 }).withMessage('Name must be 2-255 characters'),
   body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
-  body('phone').optional().isMobilePhone().withMessage('Valid phone number required'),
+  body('phone').optional({ nullable: true, checkFalsy: true }).custom((value) => {
+    if (!value || value === '') return true; // Allow empty/null
+    // More lenient phone validation - just check it's a string with some characters
+    if (typeof value === 'string' && value.length >= 10) return true;
+    throw new Error('Phone number must be at least 10 characters');
+  }),
   body('department').trim().notEmpty().withMessage('Department is required'),
   body('position').trim().notEmpty().withMessage('Position is required'),
-  body('salary').isNumeric().isFloat({ min: 0 }).withMessage('Valid salary required'),
-  body('joinDate').optional().isISO8601().withMessage('Valid join date required'),
+  body('salary').isFloat({ min: 0 }).withMessage('Valid salary (number >= 0) required'),
+  body('joinDate').optional({ nullable: true }).custom((value) => {
+    if (!value) return true; // Allow empty/null
+    // Try to parse as date
+    const date = new Date(value);
+    return !isNaN(date.getTime());
+  }).withMessage('Valid join date required'),
   body('status').optional().isIn(['active', 'inactive', 'on_leave', 'terminated']).withMessage('Invalid status'),
 ];
 
@@ -317,6 +328,8 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      console.error('Express-validator errors:', errors.array());
+      console.error('Request body:', req.body);
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Invalid input data',
@@ -398,60 +411,174 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
     // Default password for new employees (they will reset it later)
     const defaultPassword = 'revolutic123';
 
-    // Create user account for the employee
-    const user = await User.create({
-      organization_id: organizationId,
-      email,
-      password_hash: defaultPassword, // Will be hashed by beforeCreate hook
-      name,
-      role: 'employee',
-      email_verified: false,
-      is_active: true,
-    });
+    // Normalize status to lowercase (handle 'Active' -> 'active')
+    const normalizedStatus = status ? status.toLowerCase() : 'active';
 
-    // Create employee and link to user account
-    const employee = await Employee.create({
-      organization_id: organizationId,
-      user_id: user.id, // Link employee to user account
-      employee_id: employeeId,
-      name,
-      email,
-      phone,
-      department,
-      position,
-      salary,
-      join_date: joinDate || new Date(),
-      status,
-      address,
-      emergency_contact: emergencyContact,
-      manager_id: managerId,
-    });
+    // Use transaction to ensure atomicity (both User and Employee are created or neither)
+    const transaction = await sequelize.transaction();
 
-    // Load employee with associations
-    const createdEmployee = await Employee.findByPk(employee.id, {
-      include: [
-        {
-          model: Employee,
-          as: 'manager',
-          attributes: ['id', 'name', 'position'],
+    try {
+      // Double-check email uniqueness within transaction (to handle race conditions)
+      const existingUserInTx = await User.findOne({
+        where: {
+          email,
+          organization_id: organizationId,
         },
-        {
-          model: User,
-          as: 'user',
-          attributes: ['id', 'email', 'role', 'is_active'],
-        },
-      ],
-    });
+        transaction,
+      });
 
-    res.status(201).json({
-      data: createdEmployee,
-      message: 'Employee created successfully with user account. Default password: revolutic123',
-    });
+      if (existingUserInTx) {
+        await transaction.rollback();
+        return res.status(409).json({
+          error: 'Conflict',
+          message: `A user with email "${email}" already exists in this organization`,
+          code: 409,
+        });
+      }
+
+      const existingEmployeeInTx = await Employee.findOne({
+        where: {
+          email,
+          organization_id: organizationId,
+        },
+        transaction,
+      });
+
+      if (existingEmployeeInTx) {
+        await transaction.rollback();
+        return res.status(409).json({
+          error: 'Conflict',
+          message: `An employee with email "${email}" already exists in this organization`,
+          code: 409,
+        });
+      }
+
+      // Create user account for the employee
+      const user = await User.create({
+        organization_id: organizationId,
+        email,
+        password_hash: defaultPassword, // Will be hashed by beforeCreate hook
+        name,
+        role: 'employee',
+        email_verified: false,
+        is_active: true,
+      }, { transaction });
+
+      // Create employee and link to user account
+      const employee = await Employee.create({
+        organization_id: organizationId,
+        user_id: user.id, // Link employee to user account
+        employee_id: employeeId,
+        name,
+        email,
+        phone,
+        department,
+        position,
+        salary,
+        join_date: joinDate ? new Date(joinDate) : new Date(),
+        status: normalizedStatus,
+        address,
+        emergency_contact: emergencyContact,
+        manager_id: managerId,
+      }, { transaction });
+
+      // Commit transaction
+      await transaction.commit();
+
+      // Load employee with associations
+      const createdEmployee = await Employee.findByPk(employee.id, {
+        include: [
+          {
+            model: Employee,
+            as: 'manager',
+            attributes: ['id', 'name', 'position'],
+          },
+          {
+            model: User,
+            as: 'user',
+            attributes: ['id', 'email', 'role', 'is_active'],
+          },
+        ],
+      });
+
+      res.status(201).json({
+        data: createdEmployee,
+        message: 'Employee created successfully with user account. Default password: revolutic123',
+      });
+    } catch (createError) {
+      // Rollback transaction on error
+      await transaction.rollback();
+      throw createError; // Re-throw to be caught by outer catch block
+    }
   } catch (error) {
     console.error('Create employee error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
+    
+    // Handle Sequelize validation errors
+    if (error.name === 'SequelizeValidationError') {
+      const validationErrors = error.errors.map(err => ({
+        field: err.path,
+        message: err.message,
+        value: err.value,
+      }));
+      console.error('Sequelize validation errors:', validationErrors);
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Invalid input data',
+        code: 400,
+        details: validationErrors,
+      });
+    }
+    
+    // Handle Sequelize unique constraint errors
+    if (error.name === 'SequelizeUniqueConstraintError') {
+      console.error('Unique constraint error details:', {
+        fields: error.fields,
+        parent: error.parent?.message,
+        errors: error.errors,
+      });
+      
+      // Check which unique constraint was violated
+      const constraintName = error.parent?.message || '';
+      let message = 'A record with this information already exists';
+      
+      if (constraintName.includes('unique_employee_email_per_organization') || 
+          error.fields?.includes('email')) {
+        message = `An employee with email "${req.body.email}" already exists in this organization`;
+      } else if (constraintName.includes('unique_employee_id_per_organization') || 
+                 error.fields?.includes('employee_id')) {
+        message = `An employee with ID "${req.body.employee_id || 'generated'}" already exists in this organization`;
+      } else if (constraintName.includes('unique_email_per_organization') || 
+                 error.fields?.includes('email')) {
+        message = `A user with email "${req.body.email}" already exists in this organization`;
+      } else if (error.errors && error.errors.length > 0) {
+        const firstError = error.errors[0];
+        message = `${firstError.path || 'Field'} "${firstError.value || 'value'}" already exists`;
+      }
+      
+      return res.status(409).json({
+        error: 'Conflict',
+        message: message,
+        code: 409,
+      });
+    }
+    
+    // Handle database constraint errors
+    if (error.name === 'SequelizeForeignKeyConstraintError') {
+      console.error('Foreign key constraint error:', error.message);
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Invalid reference: ' + error.message,
+        code: 400,
+      });
+    }
+    
     res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Failed to create employee',
+      message: `Failed to create employee: ${error.message}`,
       code: 500,
     });
   }

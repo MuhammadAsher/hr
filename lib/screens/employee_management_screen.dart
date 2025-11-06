@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/employee.dart';
 import '../services/api_employee_service.dart';
 import '../services/error_service.dart';
+import '../constants/positions.dart';
 import 'package:intl/intl.dart';
 
 class EmployeeManagementScreen extends StatefulWidget {
@@ -436,6 +437,12 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
     'Operations',
   ];
 
+  String? _selectedPosition;
+  bool _isCustomPosition = false;
+  final List<String> _availablePositions = EmployeePositions.allPositions;
+  final TextEditingController _searchPositionController = TextEditingController();
+  List<String> _filteredPositions = EmployeePositions.allPositions;
+
   @override
   void initState() {
     super.initState();
@@ -446,6 +453,15 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
       _positionController.text = widget.employee!.position;
       _salaryController.text = widget.employee!.salary.toString();
       _selectedDepartment = widget.employee!.department;
+      
+      // Check if position is in predefined list
+      if (EmployeePositions.isPredefined(widget.employee!.position)) {
+        _selectedPosition = widget.employee!.position;
+        _isCustomPosition = false;
+      } else {
+        _isCustomPosition = true;
+        _selectedPosition = 'Custom';
+      }
     }
   }
 
@@ -456,13 +472,205 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
     _phoneController.dispose();
     _positionController.dispose();
     _salaryController.dispose();
+    _searchPositionController.dispose();
     super.dispose();
   }
 
+  void _showPositionPicker(BuildContext context) {
+    // Reset search when opening
+    _searchPositionController.clear();
+    _filteredPositions = _availablePositions;
+    
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setModalState) => DraggableScrollableSheet(
+          initialChildSize: 0.7,
+          minChildSize: 0.5,
+          maxChildSize: 0.95,
+          expand: false,
+          builder: (context, scrollController) => Container(
+            decoration: const BoxDecoration(
+              color: Colors.white,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            child: Column(
+              children: [
+                // Handle bar
+                Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[300],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+                // Header
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  child: Row(
+                    children: [
+                      const Text(
+                        'Select Position',
+                        style: TextStyle(
+                          fontSize: 20,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                      const Spacer(),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                ),
+                const Divider(height: 1),
+                // Search field
+                Padding(
+                  padding: const EdgeInsets.all(16),
+                  child: TextField(
+                    controller: _searchPositionController,
+                    decoration: InputDecoration(
+                      hintText: 'Search positions...',
+                      prefixIcon: const Icon(Icons.search),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 16,
+                        vertical: 12,
+                      ),
+                    ),
+                    onChanged: (value) {
+                      setModalState(() {
+                        if (value.isEmpty) {
+                          _filteredPositions = _availablePositions;
+                        } else {
+                          _filteredPositions = _availablePositions
+                              .where((position) => position
+                                  .toLowerCase()
+                                  .contains(value.toLowerCase()))
+                              .toList();
+                        }
+                      });
+                    },
+                  ),
+                ),
+                // Positions list
+                Expanded(
+                  child: _filteredPositions.isEmpty
+                      ? Center(
+                          child: Padding(
+                            padding: const EdgeInsets.all(16),
+                            child: Column(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+                                const SizedBox(height: 16),
+                                Text(
+                                  'No positions found',
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    color: Colors.grey[600],
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Text(
+                                  'Try a different search term',
+                                  style: TextStyle(
+                                    fontSize: 14,
+                                    color: Colors.grey[500],
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        )
+                      : ListView.builder(
+                          controller: scrollController,
+                          itemCount: _filteredPositions.length + 1, // +1 for Custom option
+                          itemBuilder: (context, index) {
+                            if (index == _filteredPositions.length) {
+                              // Custom option at the end
+                              return ListTile(
+                                leading: const Icon(Icons.edit),
+                                title: const Text('Custom (Enter manually)'),
+                                trailing: _isCustomPosition 
+                                    ? const Icon(Icons.check, color: Colors.blue)
+                                    : null,
+                                onTap: () {
+                                  setState(() {
+                                    _isCustomPosition = true;
+                                    _selectedPosition = 'Custom';
+                                    _positionController.clear();
+                                  });
+                                  Navigator.pop(context);
+                                },
+                              );
+                            }
+                            
+                            final position = _filteredPositions[index];
+                            final isSelected = !_isCustomPosition && _selectedPosition == position;
+                            
+                            return ListTile(
+                              title: Text(position),
+                              trailing: isSelected 
+                                  ? const Icon(Icons.check, color: Colors.blue)
+                                  : null,
+                              selected: isSelected,
+                              onTap: () {
+                                setState(() {
+                                  _isCustomPosition = false;
+                                  _selectedPosition = position;
+                                  _positionController.text = position;
+                                });
+                                Navigator.pop(context);
+                              },
+                            );
+                          },
+                        ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
   Future<void> _saveEmployee() async {
+    // Validate position field first
+    String? positionError;
+    if (_isCustomPosition && _positionController.text.trim().isEmpty) {
+      positionError = 'Please enter a custom position';
+    } else if (!_isCustomPosition && _selectedPosition == null) {
+      positionError = 'Please select a position';
+    }
+    
+    if (positionError != null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(positionError),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+      return;
+    }
+    
     if (_formKey.currentState!.validate()) {
       try {
         final apiEmployeeService = ApiEmployeeService();
+
+        // Get the final position value
+        final String positionValue = _isCustomPosition 
+            ? _positionController.text.trim()
+            : (_selectedPosition ?? _positionController.text.trim());
 
         if (widget.employee == null) {
           // Create new employee via API
@@ -472,10 +680,10 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
             email: _emailController.text,
             phone: _phoneController.text,
             department: _selectedDepartment,
-            position: _positionController.text,
+            position: positionValue,
             salary: double.parse(_salaryController.text),
             joinDate: DateTime.now(),
-            status: 'Active',
+            status: 'active',
           );
           print('✅ Employee created successfully: ${newEmployee.id}');
         } else {
@@ -486,7 +694,7 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
             'email': _emailController.text,
             'phone': _phoneController.text,
             'department': _selectedDepartment,
-            'position': _positionController.text,
+            'position': positionValue,
             'salary': double.parse(_salaryController.text),
             'status': widget.employee!.status.toLowerCase(),
           };
@@ -585,15 +793,53 @@ class _AddEditEmployeeScreenState extends State<AddEditEmployeeScreen> {
               },
             ),
             const SizedBox(height: 16),
-            TextFormField(
-              controller: _positionController,
-              decoration: const InputDecoration(
-                labelText: 'Position',
-                border: OutlineInputBorder(),
+            // Position Field with Bottom Sheet Picker
+            InkWell(
+              onTap: () => _showPositionPicker(context),
+              child: InputDecorator(
+                decoration: InputDecoration(
+                  labelText: 'Position',
+                  border: const OutlineInputBorder(),
+                  helperText: 'Tap to select a position or enter custom',
+                  suffixIcon: const Icon(Icons.arrow_drop_down),
+                ),
+                child: Text(
+                  _isCustomPosition 
+                      ? (_positionController.text.isEmpty 
+                          ? 'Select or enter position' 
+                          : _positionController.text)
+                      : (_selectedPosition ?? 'Select position'),
+                  style: TextStyle(
+                    color: (_isCustomPosition && _positionController.text.isEmpty) || 
+                           (!_isCustomPosition && _selectedPosition == null)
+                        ? Colors.grey
+                        : Colors.black,
+                  ),
+                ),
               ),
-              validator: (value) =>
-                  value?.isEmpty ?? true ? 'Please enter position' : null,
             ),
+            // Custom Position TextField (shown when Custom is selected)
+            if (_isCustomPosition) ...[
+              const SizedBox(height: 16),
+              TextFormField(
+                controller: _positionController,
+                decoration: const InputDecoration(
+                  labelText: 'Custom Position',
+                  border: OutlineInputBorder(),
+                  helperText: 'Enter the position name',
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Please enter a position';
+                  }
+                  return null;
+                },
+                onChanged: (value) {
+                  // Update the selected position when user types
+                  setState(() {});
+                },
+              ),
+            ],
             const SizedBox(height: 16),
             TextFormField(
               controller: _salaryController,
