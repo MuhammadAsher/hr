@@ -437,6 +437,34 @@ class ApiClient {
     return _makeRequest('GET', '/auth/me');
   }
 
+  // Request password reset (public endpoint)
+  Future<ApiResponse> requestPasswordReset(String email) {
+    return _makeRequest('POST', '/auth/forgot-password',
+        body: {'email': email}, requireAuth: false);
+  }
+
+  // Reset password with token (public endpoint)
+  Future<ApiResponse> resetPassword(String token, String newPassword, String confirmPassword) {
+    return _makeRequest('POST', '/auth/reset-password',
+        body: {
+          'token': token,
+          'newPassword': newPassword,
+          'confirmPassword': confirmPassword,
+        },
+        requireAuth: false);
+  }
+
+  // Change password (authenticated endpoint)
+  Future<ApiResponse> changePassword(String currentPassword, String newPassword, String confirmPassword) {
+    return _makeRequest('POST', '/auth/change-password',
+        body: {
+          'currentPassword': currentPassword,
+          'newPassword': newPassword,
+          'confirmPassword': confirmPassword,
+        },
+        requireAuth: true);
+  }
+
   // Check if client is authenticated
   bool get isAuthenticated => _authToken != null;
 

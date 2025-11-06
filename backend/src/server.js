@@ -162,6 +162,8 @@ async function startServer() {
     console.log('✅ Database connection established successfully.');
     
     // Validate database models (in development)
+    // Note: We use alter: false to avoid constraint issues. 
+    // Schema changes should be handled via migrations or manual SQL.
     if (process.env.NODE_ENV === 'development') {
       await sequelize.sync({ alter: false });
       console.log('✅ Database models validated.');

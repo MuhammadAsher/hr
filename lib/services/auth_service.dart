@@ -269,4 +269,73 @@ class AuthService {
       return null;
     }
   }
+
+  // Request password reset
+  Future<bool> requestPasswordReset(String email) async {
+    try {
+      final response = await _apiClient.requestPasswordReset(email);
+      if (response.isSuccess) {
+        return true;
+      } else {
+        ErrorService.showErrorSnackbar(
+          message: response.message ?? 'Failed to send password reset email',
+          error: 'Password Reset Error',
+        );
+        return false;
+      }
+    } catch (e) {
+      print('Request password reset error: $e');
+      ErrorService.showErrorSnackbar(
+        message: 'Failed to request password reset: ${e.toString()}',
+        error: 'Password Reset Error',
+      );
+      return false;
+    }
+  }
+
+  // Reset password with token
+  Future<bool> resetPassword(String token, String newPassword, String confirmPassword) async {
+    try {
+      final response = await _apiClient.resetPassword(token, newPassword, confirmPassword);
+      if (response.isSuccess) {
+        return true;
+      } else {
+        ErrorService.showErrorSnackbar(
+          message: response.message ?? 'Failed to reset password',
+          error: 'Password Reset Error',
+        );
+        return false;
+      }
+    } catch (e) {
+      print('Reset password error: $e');
+      ErrorService.showErrorSnackbar(
+        message: 'Failed to reset password: ${e.toString()}',
+        error: 'Password Reset Error',
+      );
+      return false;
+    }
+  }
+
+  // Change password (authenticated)
+  Future<bool> changePassword(String currentPassword, String newPassword, String confirmPassword) async {
+    try {
+      final response = await _apiClient.changePassword(currentPassword, newPassword, confirmPassword);
+      if (response.isSuccess) {
+        return true;
+      } else {
+        ErrorService.showErrorSnackbar(
+          message: response.message ?? 'Failed to change password',
+          error: 'Change Password Error',
+        );
+        return false;
+      }
+    } catch (e) {
+      print('Change password error: $e');
+      ErrorService.showErrorSnackbar(
+        message: 'Failed to change password: ${e.toString()}',
+        error: 'Change Password Error',
+      );
+      return false;
+    }
+  }
 }

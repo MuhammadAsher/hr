@@ -376,12 +376,43 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
       });
     }
 
+    // Check if user with this email already exists in organization
+    const existingUser = await User.findOne({
+      where: {
+        email,
+        organization_id: organizationId,
+      },
+    });
+
+    if (existingUser) {
+      return res.status(409).json({
+        error: 'Conflict',
+        message: 'User with this email already exists',
+        code: 409,
+      });
+    }
+
     // Generate employee ID
     const employeeId = await Employee.generateEmployeeId(organizationId);
 
-    // Create employee
+    // Default password for new employees (they will reset it later)
+    const defaultPassword = 'revolutic123';
+
+    // Create user account for the employee
+    const user = await User.create({
+      organization_id: organizationId,
+      email,
+      password_hash: defaultPassword, // Will be hashed by beforeCreate hook
+      name,
+      role: 'employee',
+      email_verified: false,
+      is_active: true,
+    });
+
+    // Create employee and link to user account
     const employee = await Employee.create({
       organization_id: organizationId,
+      user_id: user.id, // Link employee to user account
       employee_id: employeeId,
       name,
       email,
@@ -404,12 +435,17 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
           as: 'manager',
           attributes: ['id', 'name', 'position'],
         },
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'role', 'is_active'],
+        },
       ],
     });
 
     res.status(201).json({
       data: createdEmployee,
-      message: 'Employee created successfully',
+      message: 'Employee created successfully with user account. Default password: revolutic123',
     });
   } catch (error) {
     console.error('Create employee error:', error);

@@ -1,11 +1,14 @@
 const express = require('express');
 const { body, validationResult } = require('express-validator');
+const crypto = require('crypto');
+const { Op } = require('sequelize');
 const { User, Organization } = require('../models');
 const {
   generateToken,
   generateRefreshToken,
   verifyRefreshToken,
   authenticateToken,
+  optionalAuthenticateToken,
 } = require('../middleware/auth');
 
 const router = express.Router();
@@ -114,42 +117,86 @@ router.post('/login', loginValidation, async (req, res) => {
     // Find user by email
     let user;
     
-    // Check for super admin first
-    if (email === process.env.SUPER_ADMIN_EMAIL) {
-      user = await User.findOne({
-        where: {
-          email,
-          is_super_admin: true,
-          is_active: true,
-        },
-      });
-    } else {
-      // Find regular user
-      user = await User.findOne({
-        where: {
-          email,
-          role,
-          is_active: true,
-        },
-        include: [
-          {
-            model: Organization,
-            as: 'organization',
-            attributes: ['id', 'name', 'is_active'],
+    try {
+      // Check for super admin first
+      if (email === process.env.SUPER_ADMIN_EMAIL) {
+        user = await User.findOne({
+          where: {
+            email,
+            is_super_admin: true,
+            is_active: true,
           },
-        ],
-      });
+        });
+      } else {
+        // Find regular user with optional organization association
+        // Explicitly specify all User attributes to avoid column reference issues
+        user = await User.findOne({
+          where: {
+            email,
+            role,
+            is_active: true,
+          },
+          attributes: [
+            'id',
+            'organization_id',
+            'email',
+            'password_hash',
+            'name',
+            'role',
+            'is_super_admin',
+            'is_active',
+            'last_login',
+            'email_verified',
+            'profile_picture',
+            'reset_token',
+            'reset_token_expiry',
+            'created_at',
+            'updated_at',
+          ],
+          include: [
+            {
+              model: Organization,
+              as: 'organization',
+              attributes: ['id', 'name', 'is_active'],
+              required: false, // Left join - don't fail if org doesn't exist
+            },
+          ],
+        });
+      }
+    } catch (dbError) {
+      console.error('Database error during user lookup:', dbError);
+      console.error('Database error stack:', dbError.stack);
+      console.error('Email:', email, 'Role:', role);
+      return res.error(`Database error during login: ${dbError.message}`, 500);
     }
 
     if (!user) {
+      console.log(`❌ User not found: email=${email}, role=${role}`);
       return res.unauthorized('Invalid credentials');
     }
+    
+    console.log(`✅ User found: ${user.email}, role=${user.role}, is_active=${user.is_active}`);
 
     // Validate password
-    const isValidPassword = await user.validatePassword(password);
+    let isValidPassword;
+    try {
+      if (!user || !user.validatePassword) {
+        console.error('User object is invalid or missing validatePassword method');
+        return res.error('Invalid user object', 500);
+      }
+      isValidPassword = await user.validatePassword(password);
+    } catch (passwordError) {
+      console.error('Password validation error:', passwordError);
+      console.error('Password validation error stack:', passwordError.stack);
+      return res.error(`Password validation failed: ${passwordError.message}`, 500);
+    }
+
     if (!isValidPassword) {
+      console.log(`❌ Invalid password for user: ${user.email}`);
       return res.unauthorized('Invalid credentials');
     }
+    
+    console.log(`✅ Password validated successfully for user: ${user.email}`);
 
     // Check if organization is active (except for super admin)
     if (!user.is_super_admin && user.organization && !user.organization.is_active) {
@@ -161,11 +208,22 @@ router.post('/login', loginValidation, async (req, res) => {
     }
 
     // Update last login
-    await user.updateLastLogin();
+    try {
+      await user.updateLastLogin();
+    } catch (updateError) {
+      console.warn('Failed to update last login:', updateError);
+      // Continue with login even if update fails
+    }
 
     // Generate tokens
-    const token = generateToken(user);
-    const refreshToken = generateRefreshToken(user);
+    let token, refreshToken;
+    try {
+      token = generateToken(user);
+      refreshToken = generateRefreshToken(user);
+    } catch (tokenError) {
+      console.error('Token generation error:', tokenError);
+      return res.error('Token generation failed', 500);
+    }
 
     // Return success response
     res.status(200).json({
@@ -191,7 +249,11 @@ router.post('/login', loginValidation, async (req, res) => {
     });
   } catch (error) {
     console.error('Login error:', error);
-    res.error('Login failed', 500);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
+    console.error('Request body:', req.body);
+    res.error(`Login failed: ${error.message}`, 500);
   }
 });
 
@@ -479,16 +541,21 @@ router.post('/refresh', refreshTokenValidation, async (req, res) => {
  *               $ref: '#/components/schemas/ErrorResponse'
  */
 // Logout endpoint
-router.post('/logout', authenticateToken, async (req, res) => {
+// Use optional auth so logout works even if token is expired or user is deleted
+router.post('/logout', optionalAuthenticateToken, async (req, res) => {
   try {
     // In a production app, you might want to blacklist the token
     // For now, we'll just return success
+    // Logout should always succeed - we're clearing tokens on the client side anyway
     res.success({
       timestamp: new Date().toISOString(),
     }, 'Logout successful');
   } catch (error) {
     console.error('Logout error:', error);
-    res.error('Logout failed', 500);
+    // Even if there's an error, return success since logout is primarily client-side
+    res.success({
+      timestamp: new Date().toISOString(),
+    }, 'Logout successful');
   }
 });
 
@@ -522,6 +589,285 @@ router.get('/me', authenticateToken, async (req, res) => {
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to get user profile',
+      code: 500,
+    });
+  }
+});
+
+// Password reset validation rules
+const requestPasswordResetValidation = [
+  body('email').isEmail().normalizeEmail().withMessage('Valid email is required'),
+];
+
+const resetPasswordValidation = [
+  body('token').notEmpty().withMessage('Reset token is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('confirmPassword').custom((value, { req }) => {
+    if (value !== req.body.newPassword) {
+      throw new Error('Password confirmation does not match password');
+    }
+    return true;
+  }),
+];
+
+const changePasswordValidation = [
+  body('currentPassword').notEmpty().withMessage('Current password is required'),
+  body('newPassword').isLength({ min: 6 }).withMessage('Password must be at least 6 characters'),
+  body('confirmPassword').custom((value, { req }) => {
+    if (value !== req.body.newPassword) {
+      throw new Error('Password confirmation does not match password');
+    }
+    return true;
+  }),
+];
+
+/**
+ * @swagger
+ * /api/v1/auth/forgot-password:
+ *   post:
+ *     summary: Request password reset
+ *     description: Send password reset token to user's email
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [email]
+ *             properties:
+ *               email:
+ *                 type: string
+ *                 format: email
+ *                 example: "user@example.com"
+ *     responses:
+ *       200:
+ *         description: Password reset token sent successfully
+ *       404:
+ *         description: User not found
+ */
+router.post('/forgot-password', requestPasswordResetValidation, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Invalid input data',
+        code: 400,
+        details: errors.array(),
+      });
+    }
+
+    const { email } = req.body;
+
+    // Find user by email (don't restrict by organization for password reset)
+    const user = await User.findOne({
+      where: { email, is_active: true },
+    });
+
+    // Don't reveal if user exists or not for security
+    if (!user) {
+      return res.status(200).json({
+        status: true,
+        message: 'If an account with that email exists, a password reset link has been sent.',
+      });
+    }
+
+    // Generate reset token (32 random bytes as hex = 64 characters)
+    const resetToken = crypto.randomBytes(32).toString('hex');
+    const resetTokenExpiry = new Date();
+    resetTokenExpiry.setHours(resetTokenExpiry.getHours() + 1); // Token expires in 1 hour
+
+    // Save reset token to user
+    await user.update({
+      reset_token: resetToken,
+      reset_token_expiry: resetTokenExpiry,
+    });
+
+    // In production, send email with reset link
+    // For now, we'll return the token in development (remove in production!)
+    console.log(`Password reset token for ${email}: ${resetToken}`);
+
+    res.status(200).json({
+      status: true,
+      message: 'If an account with that email exists, a password reset link has been sent.',
+      // Remove this in production - only for development/testing
+      data: process.env.NODE_ENV === 'development' ? { resetToken } : undefined,
+    });
+  } catch (error) {
+    console.error('Forgot password error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to process password reset request',
+      code: 500,
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/v1/auth/reset-password:
+ *   post:
+ *     summary: Reset password with token
+ *     description: Reset user password using the reset token
+ *     tags: [Authentication]
+ *     security: []
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [token, newPassword, confirmPassword]
+ *             properties:
+ *               token:
+ *                 type: string
+ *                 example: "abc123..."
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 6
+ *                 example: "newpassword123"
+ *               confirmPassword:
+ *                 type: string
+ *                 example: "newpassword123"
+ *     responses:
+ *       200:
+ *         description: Password reset successfully
+ *       400:
+ *         description: Invalid or expired token
+ */
+router.post('/reset-password', resetPasswordValidation, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Invalid input data',
+        code: 400,
+        details: errors.array(),
+      });
+    }
+
+    const { token, newPassword } = req.body;
+
+    // Find user by reset token
+    const user = await User.findOne({
+      where: {
+        reset_token: token,
+        reset_token_expiry: { [Op.gt]: new Date() }, // Token not expired
+      },
+    });
+
+    if (!user) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Invalid or expired reset token',
+        code: 400,
+      });
+    }
+
+    // Update password (will be hashed by beforeUpdate hook)
+    await user.update({
+      password_hash: newPassword,
+      reset_token: null,
+      reset_token_expiry: null,
+    });
+
+    res.status(200).json({
+      status: true,
+      message: 'Password reset successfully',
+    });
+  } catch (error) {
+    console.error('Reset password error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to reset password',
+      code: 500,
+    });
+  }
+});
+
+/**
+ * @swagger
+ * /api/v1/auth/change-password:
+ *   post:
+ *     summary: Change password (authenticated)
+ *     description: Change password for logged-in user
+ *     tags: [Authentication]
+ *     requestBody:
+ *       required: true
+ *       content:
+ *         application/json:
+ *           schema:
+ *             type: object
+ *             required: [currentPassword, newPassword, confirmPassword]
+ *             properties:
+ *               currentPassword:
+ *                 type: string
+ *                 example: "oldpassword123"
+ *               newPassword:
+ *                 type: string
+ *                 minLength: 6
+ *                 example: "newpassword123"
+ *               confirmPassword:
+ *                 type: string
+ *                 example: "newpassword123"
+ *     responses:
+ *       200:
+ *         description: Password changed successfully
+ *       400:
+ *         description: Invalid current password
+ */
+router.post('/change-password', authenticateToken, changePasswordValidation, async (req, res) => {
+  try {
+    const errors = validationResult(req);
+    if (!errors.isEmpty()) {
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Invalid input data',
+        code: 400,
+        details: errors.array(),
+      });
+    }
+
+    const { currentPassword, newPassword } = req.body;
+
+    // Get user from token
+    const user = await User.findByPk(req.user.id);
+
+    if (!user) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'User not found',
+        code: 404,
+      });
+    }
+
+    // Verify current password
+    const isValidPassword = await user.validatePassword(currentPassword);
+    if (!isValidPassword) {
+      return res.status(400).json({
+        error: 'Bad Request',
+        message: 'Current password is incorrect',
+        code: 400,
+      });
+    }
+
+    // Update password (will be hashed by beforeUpdate hook)
+    await user.update({
+      password_hash: newPassword,
+    });
+
+    res.status(200).json({
+      status: true,
+      message: 'Password changed successfully',
+    });
+  } catch (error) {
+    console.error('Change password error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to change password',
       code: 500,
     });
   }
