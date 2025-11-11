@@ -41,7 +41,7 @@ class LeaveService {
               (mappedJson['employee'] is Map<String, dynamic>
                   ? (mappedJson['employee'] as Map<String, dynamic>)['id'] as String? ?? ''
                   : '');
-          mappedJson['status'] = mappedJson['status'] as String? ?? 'pending';
+          mappedJson['status'] = _mapStatusFromBackend(mappedJson['status'] as String?);
           mappedJson['reason'] = mappedJson['reason'] as String? ?? '';
 
           mappedJson['startDate'] = _normalizeDate(mappedJson['startDate'], fallbackNow: true);
@@ -124,6 +124,21 @@ class LeaveService {
     }
   }
 
+  String _mapStatusFromBackend(String? backendStatus) {
+    final value = backendStatus?.toLowerCase() ?? 'pending';
+    switch (value) {
+      case 'approved':
+        return 'Approved';
+      case 'rejected':
+        return 'Rejected';
+      case 'cancelled':
+        return 'Cancelled';
+      case 'pending':
+      default:
+        return 'Pending';
+    }
+  }
+
   // Submit new leave request
   Future<bool> submitLeaveRequest({
     required String type,
@@ -203,7 +218,7 @@ class LeaveService {
   Future<bool> rejectLeaveRequest(String requestId, {String? reason}) async {
     try {
       final body = <String, dynamic>{};
-      if (reason != null) body['reason'] = reason;
+      if (reason != null) body['comments'] = reason;
 
       final response = await _apiClient.post(
         '/leave-requests/$requestId/reject',

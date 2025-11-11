@@ -50,6 +50,9 @@ const formatLeaveRequestResponse = (requestInstance) => {
   const leave = requestInstance.toJSON();
   const employee = requestInstance.employee || {};
   const approver = requestInstance.approvedBy || null;
+  const status = typeof leave.status === 'string' && leave.status.length > 0
+    ? leave.status.charAt(0).toUpperCase() + leave.status.slice(1)
+    : 'Pending';
 
   return {
     id: leave.id,
@@ -59,7 +62,7 @@ const formatLeaveRequestResponse = (requestInstance) => {
     startDate: leave.start_date instanceof Date ? leave.start_date.toISOString().split('T')[0] : leave.start_date,
     endDate: leave.end_date instanceof Date ? leave.end_date.toISOString().split('T')[0] : leave.end_date,
     reason: leave.reason,
-    status: leave.status,
+    status,
     halfDay: leave.half_day,
     requestDate: leave.created_at instanceof Date ? leave.created_at.toISOString() : leave.created_at,
     approvedBy: approver ? approver.name : null,
@@ -483,9 +486,11 @@ router.put('/:leaveId', updateLeaveRequestValidation, async (req, res) => {
 
 // Approve leave request (Admin only)
 router.post('/:leaveId/approve', requireAdmin, approveRejectValidation, async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await transaction.rollback();
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Invalid input data',
@@ -494,18 +499,69 @@ router.post('/:leaveId/approve', requireAdmin, approveRejectValidation, async (r
       });
     }
 
-    // TODO: Implement leave request approval
+    const { leaveId } = req.params;
+    const { comments } = req.body;
+
+    const leaveRequest = await LeaveRequest.findByPk(leaveId, {
+      include: [
+        {
+          model: Employee,
+          as: 'employee',
+          attributes: ['id', 'organization_id'],
+        },
+      ],
+      transaction,
+    });
+
+    if (!leaveRequest) {
+      await transaction.rollback();
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Leave request not found',
+        code: 404,
+      });
+    }
+
+    if (!req.user.is_super_admin && leaveRequest.organization_id !== req.user.organization_id) {
+      await transaction.rollback();
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this leave request',
+        code: 403,
+      });
+    }
+
+    if (leaveRequest.status !== 'pending') {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Only pending leave requests can be approved',
+        code: 400,
+      });
+    }
+
+    await leaveRequest.update({
+      status: 'approved',
+      approved_by: req.user.id,
+      approved_at: new Date(),
+      comments: comments || null,
+    }, { transaction });
+
+    await transaction.commit();
+
+    const updated = await LeaveRequest.findByPk(leaveId, {
+      include: [
+        { model: Employee, as: 'employee', attributes: ['id', 'name'] },
+        { model: User, as: 'approvedBy', attributes: ['id', 'name'] },
+      ],
+    });
+
     res.status(200).json({
-      message: 'Leave request approved successfully - Ready for implementation',
-      data: {
-        id: req.params.leaveId,
-        status: 'approved',
-        approvedBy: req.user.userId,
-        approvedAt: new Date().toISOString(),
-        comments: req.body.comments || null
-      }
+      message: 'Leave request approved successfully',
+      data: formatLeaveRequestResponse(updated),
     });
   } catch (error) {
+    await transaction.rollback();
     console.error('Approve leave request error:', error);
     res.status(500).json({
       error: 'Internal Server Error',
@@ -517,9 +573,11 @@ router.post('/:leaveId/approve', requireAdmin, approveRejectValidation, async (r
 
 // Reject leave request (Admin only)
 router.post('/:leaveId/reject', requireAdmin, approveRejectValidation, async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await transaction.rollback();
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Invalid input data',
@@ -528,18 +586,77 @@ router.post('/:leaveId/reject', requireAdmin, approveRejectValidation, async (re
       });
     }
 
-    // TODO: Implement leave request rejection
+    const { leaveId } = req.params;
+    const { comments } = req.body;
+
+    const leaveRequest = await LeaveRequest.findByPk(leaveId, {
+      include: [
+        {
+          model: Employee,
+          as: 'employee',
+          attributes: ['id', 'organization_id'],
+        },
+      ],
+      transaction,
+    });
+
+    if (!leaveRequest) {
+      await transaction.rollback();
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Leave request not found',
+        code: 404,
+      });
+    }
+
+    if (!req.user.is_super_admin && leaveRequest.organization_id !== req.user.organization_id) {
+      await transaction.rollback();
+      return res.status(403).json({
+        error: 'Forbidden',
+        message: 'You do not have access to this leave request',
+        code: 403,
+      });
+    }
+
+    if (leaveRequest.status !== 'pending') {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Only pending leave requests can be rejected',
+        code: 400,
+      });
+    }
+
+    await leaveRequest.update({
+      status: 'rejected',
+      approved_by: req.user.id,
+      approved_at: new Date(),
+      comments: comments || null,
+    }, { transaction });
+
+    await transaction.commit();
+
+    const updatedLeave = await LeaveRequest.findByPk(leaveId, {
+      include: [
+        {
+          model: Employee,
+          as: 'employee',
+          attributes: ['id', 'name', 'organization_id'],
+        },
+        {
+          model: User,
+          as: 'approvedBy',
+          attributes: ['id', 'name'],
+        },
+      ],
+    });
+
     res.status(200).json({
-      message: 'Leave request rejected successfully - Ready for implementation',
-      data: {
-        id: req.params.leaveId,
-        status: 'rejected',
-        rejectedBy: req.user.userId,
-        rejectedAt: new Date().toISOString(),
-        comments: req.body.comments || 'No reason provided'
-      }
+      message: 'Leave request rejected successfully',
+      data: formatLeaveRequestResponse(updatedLeave),
     });
   } catch (error) {
+    await transaction.rollback();
     console.error('Reject leave request error:', error);
     res.status(500).json({
       error: 'Internal Server Error',

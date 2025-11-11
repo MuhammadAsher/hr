@@ -10,6 +10,8 @@ class LeaveRequest {
   final DateTime requestDate;
   final String? approvedBy;
   final DateTime? approvedDate;
+  final bool halfDay;
+  final String? comments;
 
   LeaveRequest({
     required this.id,
@@ -23,9 +25,14 @@ class LeaveRequest {
     required this.requestDate,
     this.approvedBy,
     this.approvedDate,
+    this.halfDay = false,
+    this.comments,
   });
 
   int get daysCount {
+    if (halfDay) {
+      return 0;
+    }
     return endDate.difference(startDate).inDays + 1;
   }
 
@@ -42,6 +49,8 @@ class LeaveRequest {
       'requestDate': requestDate.toIso8601String(),
       'approvedBy': approvedBy,
       'approvedDate': approvedDate?.toIso8601String(),
+      'halfDay': halfDay,
+      'comments': comments,
     };
   }
 
@@ -54,13 +63,28 @@ class LeaveRequest {
       startDate: DateTime.parse(json['startDate'] as String),
       endDate: DateTime.parse(json['endDate'] as String),
       reason: json['reason'] as String,
-      status: json['status'] as String? ?? 'Pending',
+      status: _formatStatus(json['status'] as String? ?? 'pending'),
       requestDate: DateTime.parse(json['requestDate'] as String),
       approvedBy: json['approvedBy'] as String?,
       approvedDate: json['approvedDate'] != null
           ? DateTime.parse(json['approvedDate'] as String)
           : null,
+      halfDay: json['halfDay'] as bool? ?? false,
+      comments: json['comments'] as String?,
     );
+  }
+
+  static String _formatStatus(String status) {
+    switch (status.toLowerCase()) {
+      case 'approved':
+        return 'Approved';
+      case 'rejected':
+        return 'Rejected';
+      case 'cancelled':
+        return 'Cancelled';
+      default:
+        return 'Pending';
+    }
   }
 
   LeaveRequest copyWith({
@@ -75,6 +99,8 @@ class LeaveRequest {
     DateTime? requestDate,
     String? approvedBy,
     DateTime? approvedDate,
+    bool? halfDay,
+    String? comments,
   }) {
     return LeaveRequest(
       id: id ?? this.id,
@@ -88,6 +114,8 @@ class LeaveRequest {
       requestDate: requestDate ?? this.requestDate,
       approvedBy: approvedBy ?? this.approvedBy,
       approvedDate: approvedDate ?? this.approvedDate,
+      halfDay: halfDay ?? this.halfDay,
+      comments: comments ?? this.comments,
     );
   }
 }
