@@ -31,7 +31,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   int _totalEmployees = 0;
   int _totalDepartments = 0;
   int _pendingLeaves = 0;
-  int _activeProjects = 0; // This might need a task service if implemented
+  int _activeEmployees = 0;
   bool _isLoading = true;
   int _currentIndex = 0;
   String _quickSearchQuery = '';
@@ -89,14 +89,14 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
         _fetchTotalEmployees(),
         _fetchTotalDepartments(),
         _fetchPendingLeaves(),
-        _fetchActiveProjects(),
+        _fetchActiveEmployees(),
       ]);
 
       setState(() {
         _totalEmployees = results[0] as int;
         _totalDepartments = results[1] as int;
         _pendingLeaves = results[2] as int;
-        _activeProjects = results[3] as int;
+        _activeEmployees = results[3] as int;
         _isLoading = false;
       });
     } catch (e) {
@@ -155,10 +155,14 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
     }
   }
 
-  Future<int> _fetchActiveProjects() async {
-    // TODO: Implement when task/project service is available
-    // For now, return 0
-    return 0;
+  Future<int> _fetchActiveEmployees() async {
+    try {
+      final employees = await _employeeService.getAllEmployees(status: 'active', limit: 1000);
+      return employees.length;
+    } catch (e) {
+      print('Error fetching active employees: $e');
+      return 0;
+    }
   }
 
   @override
@@ -189,7 +193,12 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (index) => setState(() => _currentIndex = index),
+        onTap: (index) {
+          setState(() => _currentIndex = index);
+          if (index == 1) {
+            _loadDashboardData();
+          }
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Statistics'),
@@ -274,7 +283,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
+          const SizedBox(height: 16),
           Row(
             children: [
               Expanded(
@@ -314,9 +323,9 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
               Expanded(
                 child: _buildStatCard(
                   context,
-                  'Active Projects',
-                  _isLoading ? '...' : _activeProjects.toString(),
-                  Icons.work,
+                  'Active Employees',
+                  _isLoading ? '...' : _activeEmployees.toString(),
+                  Icons.verified_rounded,
                   Colors.purple,
                 ),
               ),

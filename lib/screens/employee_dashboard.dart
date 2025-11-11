@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/user.dart';
+import '../services/leave_service.dart';
+import '../services/attendance_service.dart';
+import '../services/task_service.dart';
 import 'apply_leave_screen.dart';
 import 'payslips_screen.dart';
 import 'my_attendance_screen.dart';
@@ -19,6 +22,21 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   int _currentIndex = 0;
   final TextEditingController _searchController = TextEditingController();
   String _searchQuery = '';
+  final LeaveService _leaveService = LeaveService();
+  final AttendanceService _attendanceService = AttendanceService();
+  final TaskService _taskService = TaskService();
+
+  bool _isStatsLoading = true;
+  double? _remainingLeaveDays;
+  double? _attendanceRate;
+  int? _openTasks;
+  int? _completedTasks;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadEmployeeStats();
+  }
 
   @override
   void dispose() {
@@ -47,7 +65,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
       ),
       bottomNavigationBar: BottomNavigationBar(
         currentIndex: _currentIndex,
-        onTap: (value) => setState(() => _currentIndex = value),
+        onTap: (value) {
+          setState(() => _currentIndex = value);
+          if (value == 1) {
+            _loadEmployeeStats();
+          }
+        },
         items: const [
           BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
           BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Statistics'),
@@ -65,9 +88,9 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
@@ -104,16 +127,16 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           if (filtered.isEmpty)
             Padding(
               padding: const EdgeInsets.only(top: 24),
-              child: Column(
-                children: [
+                      child: Column(
+                        children: [
                   Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
                   const SizedBox(height: 8),
                   Text('No quick actions found', style: TextStyle(color: Colors.grey[600])),
-                ],
-              ),
-            ),
-        ],
-      ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
     );
   }
 
@@ -124,53 +147,60 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const SizedBox(height: 8),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Leave Balance',
-                  '15 days',
-                  Icons.calendar_today,
-                  Colors.blue,
+          if (_isStatsLoading)
+            const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 64), child: CircularProgressIndicator()))
+          else
+            Column(
+              children: [
+                Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                    'Leave Balance',
+                        _formatDays(_remainingLeaveDays),
+                    Icons.calendar_today,
+                    Colors.blue,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Attendance',
-                  '95%',
-                  Icons.check_circle,
-                  Colors.green,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                        'Attendance Rate',
+                        _formatPercentage(_attendanceRate),
+                    Icons.check_circle,
+                    Colors.green,
+                  ),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Tasks',
-                  '8',
-                  Icons.task_alt,
-                  Colors.orange,
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                        'Open Tasks',
+                        _formatCount(_openTasks),
+                    Icons.task_alt,
+                    Colors.orange,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Projects',
-                  '3',
-                  Icons.work_outline,
-                  Colors.purple,
+                const SizedBox(width: 16),
+                Expanded(
+                  child: _buildStatCard(
+                    context,
+                        'Completed Tasks',
+                        _formatCount(_completedTasks),
+                        Icons.checklist_rounded,
+                    Colors.purple,
+                  ),
+                    ),
+                  ],
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -204,7 +234,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(
+            Text(
                               user?.name ?? 'Employee',
                               style:
                                   Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
@@ -281,12 +311,12 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
             ),
           ],
         ),
-        child: Padding(
+      child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
-          child: Column(
+        child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
-            children: [
+          children: [
               Container(
                 padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
@@ -295,17 +325,17 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                 ),
                 child: Icon(icon, color: color, size: 32),
               ),
-              const SizedBox(height: 12),
-              Text(
-                value,
+            const SizedBox(height: 12),
+            Text(
+              value,
                 style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                       fontWeight: FontWeight.w700,
-                      color: color,
-                    ),
+                color: color,
               ),
+            ),
               const SizedBox(height: 6),
-              Text(
-                title,
+            Text(
+              title,
                 textAlign: TextAlign.center,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
                       color: Colors.grey[700],
@@ -377,6 +407,80 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         },
       ),
     ];
+  }
+
+  Future<void> _loadEmployeeStats() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+    if (user == null) return;
+
+    setState(() => _isStatsLoading = true);
+
+    try {
+      final employeeId = user.id;
+      final totalLeaveAllowance = 24.0;
+
+      final leaveRequests = await _leaveService.getLeaveRequestsByEmployee(employeeId);
+      double usedLeaveDays = 0;
+      for (final request in leaveRequests) {
+        if (request.status == 'Approved') {
+          if (request.halfDay) {
+            usedLeaveDays += 0.5;
+          } else {
+            final diff = request.endDate.difference(request.startDate).inDays + 1;
+            if (diff > 0) {
+              usedLeaveDays += diff;
+            }
+          }
+        }
+      }
+
+      final remainingLeave = (totalLeaveAllowance - usedLeaveDays).clamp(0, totalLeaveAllowance).toDouble();
+
+      final attendanceStats = await _attendanceService.getAttendanceStats(employeeId);
+      final attendancePercentage = double.tryParse(
+            attendanceStats['attendancePercentage']?.toString() ?? '0',
+          ) ??
+          0.0;
+
+      final taskStats = await _taskService.getTaskStats(employeeId);
+      final openTasks = (taskStats['todoTasks'] as int? ?? 0) + (taskStats['inProgressTasks'] as int? ?? 0);
+      final completedTasks = taskStats['completedTasks'] as int? ?? 0;
+
+      if (!mounted) return;
+      setState(() {
+        _remainingLeaveDays = remainingLeave;
+        _attendanceRate = attendancePercentage;
+        _openTasks = openTasks;
+        _completedTasks = completedTasks;
+        _isStatsLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _remainingLeaveDays = null;
+        _attendanceRate = null;
+        _openTasks = null;
+        _completedTasks = null;
+        _isStatsLoading = false;
+      });
+    }
+  }
+
+  String _formatDays(double? value) {
+    if (value == null) return '--';
+    final rounded = value % 1 == 0 ? value.toStringAsFixed(0) : value.toStringAsFixed(1);
+    return '$rounded days';
+  }
+
+  String _formatPercentage(double? value) {
+    if (value == null) return '--';
+    return '${value.toStringAsFixed(1)}%';
+  }
+
+  String _formatCount(int? value) {
+    if (value == null) return '--';
+    return value.toString();
   }
 }
 
