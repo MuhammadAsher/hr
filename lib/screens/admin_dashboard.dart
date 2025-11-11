@@ -36,6 +36,8 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   int _currentIndex = 0;
   String _quickSearchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _statsSearchController = TextEditingController();
+  String _statsSearchQuery = '';
 
   @override
   void initState() {
@@ -56,6 +58,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
     routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
     _searchController.dispose();
+    _statsSearchController.dispose();
     super.dispose();
   }
 
@@ -227,7 +230,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
             TextField(
               controller: _searchController,
               decoration: InputDecoration(
-                hintText: 'Search quick actions...',
+                hintText: 'Search...',
                 prefixIcon: const Icon(Icons.search),
                 suffixIcon: _quickSearchQuery.isNotEmpty
                     ? IconButton(
@@ -278,59 +281,104 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   }
 
   Widget _buildStatisticsTab(BuildContext context) {
+    final metrics = [
+      _DashboardMetric(
+        title: 'Total Employees',
+        value: _isLoading ? '...' : _totalEmployees.toString(),
+        icon: Icons.people,
+        color: Colors.blue,
+      ),
+      _DashboardMetric(
+        title: 'Departments',
+        value: _isLoading ? '...' : _totalDepartments.toString(),
+        icon: Icons.business,
+        color: Colors.green,
+      ),
+      _DashboardMetric(
+        title: 'Pending Leaves',
+        value: _isLoading ? '...' : _pendingLeaves.toString(),
+        icon: Icons.pending_actions,
+        color: Colors.orange,
+      ),
+      _DashboardMetric(
+        title: 'Active Employees',
+        value: _isLoading ? '...' : _activeEmployees.toString(),
+        icon: Icons.verified_rounded,
+        color: Colors.purple,
+      ),
+    ];
+
+    final filteredMetrics = metrics
+        .where((metric) => metric.title.toLowerCase().contains(_statsSearchQuery.toLowerCase()))
+        .toList();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16.0),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Total Employees',
-                  _isLoading ? '...' : _totalEmployees.toString(),
-                  Icons.people,
-                  Colors.blue,
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Departments',
-                  _isLoading ? '...' : _totalDepartments.toString(),
-                  Icons.business,
-                  Colors.green,
-                ),
-              ),
-            ],
+          TextField(
+            controller: _statsSearchController,
+            decoration: InputDecoration(
+              hintText: 'Search...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _statsSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        setState(() {
+                          _statsSearchQuery = '';
+                          _statsSearchController.clear();
+                        });
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onChanged: (value) => setState(() => _statsSearchQuery = value),
           ),
           const SizedBox(height: 16),
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Pending Leaves',
-                  _isLoading ? '...' : _pendingLeaves.toString(),
-                  Icons.pending_actions,
-                  Colors.orange,
-                ),
+          if (_isLoading)
+            const Center(
+              child: Padding(
+                padding: EdgeInsets.symmetric(vertical: 64),
+                child: CircularProgressIndicator(),
               ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: _buildStatCard(
-                  context,
-                  'Active Employees',
-                  _isLoading ? '...' : _activeEmployees.toString(),
-                  Icons.verified_rounded,
-                  Colors.purple,
-                ),
+            )
+          else if (filteredMetrics.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 48),
+              child: Column(
+                children: [
+                  Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+                  const SizedBox(height: 8),
+                  Text('No statistics found', style: TextStyle(color: Colors.grey[600])),
+                ],
               ),
-            ],
-          ),
+            )
+          else
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = constraints.maxWidth > 420 ? 3 : 2;
+                final width = (constraints.maxWidth - (crossAxisCount - 1) * 12) / crossAxisCount;
+                final height = width * 0.9 + 48;
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: width / height,
+                  ),
+                  itemCount: filteredMetrics.length,
+                  itemBuilder: (context, index) {
+                    final metric = filteredMetrics[index];
+                    return _buildStatCard(context, metric.title, metric.value, metric.icon, metric.color);
+                  },
+                );
+              },
+            ),
         ],
       ),
     );
@@ -595,18 +643,18 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
           ],
         ),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
             children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: color, size: 32),
+                child: Icon(icon, color: color, size: 30),
               ),
               const SizedBox(height: 12),
               Text(
@@ -645,4 +693,18 @@ class _QuickAction {
   final IconData icon;
   final Color color;
   final VoidCallback onTap;
+}
+
+class _DashboardMetric {
+  const _DashboardMetric({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
 }

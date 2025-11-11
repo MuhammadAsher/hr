@@ -25,6 +25,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   final LeaveService _leaveService = LeaveService();
   final AttendanceService _attendanceService = AttendanceService();
   final TaskService _taskService = TaskService();
+  final TextEditingController _statsSearchController = TextEditingController();
+  String _statsSearchQuery = '';
 
   bool _isStatsLoading = true;
   double? _remainingLeaveDays;
@@ -41,6 +43,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   @override
   void dispose() {
     _searchController.dispose();
+    _statsSearchController.dispose();
     super.dispose();
   }
 
@@ -94,7 +97,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           TextField(
             controller: _searchController,
             decoration: InputDecoration(
-              hintText: 'Search quick actions...',
+              hintText: 'Search...',
               prefixIcon: const Icon(Icons.search),
               suffixIcon: _searchQuery.isNotEmpty
                   ? IconButton(
@@ -141,65 +144,98 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   }
 
   Widget _buildStatisticsTab(BuildContext context) {
+    final metrics = [
+      _EmployeeMetric(
+        title: 'Leave Balance',
+        value: _formatDays(_remainingLeaveDays),
+        icon: Icons.calendar_today,
+        color: Colors.blue,
+      ),
+      _EmployeeMetric(
+        title: 'Attendance Rate',
+        value: _formatPercentage(_attendanceRate),
+        icon: Icons.check_circle,
+        color: Colors.green,
+      ),
+      _EmployeeMetric(
+        title: 'Open Tasks',
+        value: _formatCount(_openTasks),
+        icon: Icons.task_alt,
+        color: Colors.orange,
+      ),
+      _EmployeeMetric(
+        title: 'Completed Tasks',
+        value: _formatCount(_completedTasks),
+        icon: Icons.checklist_rounded,
+        color: Colors.purple,
+      ),
+    ];
+
+    final filteredMetrics = metrics
+        .where((metric) => metric.title.toLowerCase().contains(_statsSearchQuery.toLowerCase()))
+        .toList();
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(16),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const SizedBox(height: 8),
+          TextField(
+            controller: _statsSearchController,
+            decoration: InputDecoration(
+              hintText: 'Search...',
+              prefixIcon: const Icon(Icons.search),
+              suffixIcon: _statsSearchQuery.isNotEmpty
+                  ? IconButton(
+                      icon: const Icon(Icons.clear),
+                      onPressed: () {
+                        setState(() {
+                          _statsSearchQuery = '';
+                          _statsSearchController.clear();
+                        });
+                      },
+                    )
+                  : null,
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+            ),
+            onChanged: (value) => setState(() => _statsSearchQuery = value),
+          ),
+          const SizedBox(height: 16),
           if (_isStatsLoading)
             const Center(child: Padding(padding: EdgeInsets.symmetric(vertical: 64), child: CircularProgressIndicator()))
+          else if (filteredMetrics.isEmpty)
+            Padding(
+              padding: const EdgeInsets.only(top: 48),
+              child: Column(
+                children: [
+                  Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+                  const SizedBox(height: 8),
+                  Text('No statistics found', style: TextStyle(color: Colors.grey[600])),
+                ],
+              ),
+            )
           else
-            Column(
-              children: [
-                Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Leave Balance',
-                        _formatDays(_remainingLeaveDays),
-                    Icons.calendar_today,
-                    Colors.blue,
+            LayoutBuilder(
+              builder: (context, constraints) {
+                final crossAxisCount = constraints.maxWidth > 420 ? 3 : 2;
+                final width = (constraints.maxWidth - (crossAxisCount - 1) * 12) / crossAxisCount;
+                final height = width * 0.9 + 48;
+                return GridView.builder(
+                  shrinkWrap: true,
+                  physics: const NeverScrollableScrollPhysics(),
+                  gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                    crossAxisCount: crossAxisCount,
+                    mainAxisSpacing: 12,
+                    crossAxisSpacing: 12,
+                    childAspectRatio: width / height,
                   ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                        'Attendance Rate',
-                        _formatPercentage(_attendanceRate),
-                    Icons.check_circle,
-                    Colors.green,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                        'Open Tasks',
-                        _formatCount(_openTasks),
-                    Icons.task_alt,
-                    Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                        'Completed Tasks',
-                        _formatCount(_completedTasks),
-                        Icons.checklist_rounded,
-                    Colors.purple,
-                  ),
-                    ),
-                  ],
-                ),
-              ],
+                  itemCount: filteredMetrics.length,
+                  itemBuilder: (context, index) {
+                    final metric = filteredMetrics[index];
+                    return _buildStatCard(context, metric.title, metric.value, metric.icon, metric.color);
+                  },
+                );
+              },
             ),
         ],
       ),
@@ -312,18 +348,18 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           ],
         ),
       child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 24),
+          padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
         child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             crossAxisAlignment: CrossAxisAlignment.center,
           children: [
               Container(
-                padding: const EdgeInsets.all(12),
+                padding: const EdgeInsets.all(10),
                 decoration: BoxDecoration(
                   color: color.withOpacity(0.15),
                   shape: BoxShape.circle,
                 ),
-                child: Icon(icon, color: color, size: 32),
+                child: Icon(icon, color: color, size: 30),
               ),
             const SizedBox(height: 12),
             Text(
@@ -550,4 +586,18 @@ class _QuickActionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+class _EmployeeMetric {
+  const _EmployeeMetric({
+    required this.title,
+    required this.value,
+    required this.icon,
+    required this.color,
+  });
+
+  final String title;
+  final String value;
+  final IconData icon;
+  final Color color;
 }
