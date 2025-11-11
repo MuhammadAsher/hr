@@ -13,6 +13,7 @@ import 'reports_analytics_screen.dart';
 import 'pdf_generation_screen.dart';
 import 'email_notifications_screen.dart';
 import 'advanced_reporting_screen.dart';
+import 'payslip_management_screen.dart';
 
 class AdminDashboard extends StatefulWidget {
   const AdminDashboard({super.key});
@@ -359,6 +360,21 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
                   ),
                 );
                 // Refresh dashboard data when returning from department management
+                _loadDashboardData();
+              },
+            ),
+            const SizedBox(height: 12),
+            _buildActionButton(
+              context,
+              'Manage Payslips',
+              Icons.receipt_long,
+              () async {
+                await Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const PayslipManagementScreen(),
+                  ),
+                );
                 _loadDashboardData();
               },
             ),

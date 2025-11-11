@@ -28,15 +28,13 @@ class PayslipService {
       );
 
       if (response.isSuccess) {
-        final responseData = response.data['data'];
+        final responseData = response.data['data'] ?? <String, dynamic>{};
         final List<dynamic> payslips = responseData['payslips'] ?? [];
-        return payslips.map((json) => Payslip.fromJson(json)).toList();
-      } else {
-        throw Exception(response.message ?? 'Failed to fetch payslips');
+        return payslips.map((json) => Payslip.fromJson(Map<String, dynamic>.from(json))).toList();
       }
+      throw Exception(response.message ?? 'Failed to fetch payslips');
     } catch (e) {
-      // Fallback to mock data if API fails
-      return _getMockPayslips();
+      throw Exception('Failed to fetch payslips: $e');
     }
   }
 
@@ -46,17 +44,11 @@ class PayslipService {
       final response = await _apiClient.get('/payslips/$payslipId');
 
       if (response.isSuccess) {
-        return Payslip.fromJson(response.data['data']);
-      } else {
-        throw Exception(response.message ?? 'Failed to fetch payslip');
+        return Payslip.fromJson(Map<String, dynamic>.from(response.data['data']));
       }
+      throw Exception(response.message ?? 'Failed to fetch payslip');
     } catch (e) {
-      // Fallback to mock data
-      final mockPayslips = _getMockPayslips();
-      return mockPayslips.firstWhere(
-        (payslip) => payslip.id == payslipId,
-        orElse: () => mockPayslips.first,
-      );
+      throw Exception('Failed to fetch payslip: $e');
     }
   }
 
@@ -70,6 +62,10 @@ class PayslipService {
     double deductions = 0.0,
     double overtime = 0.0,
     double bonus = 0.0,
+    String currency = 'USD',
+    Map<String, double>? allowanceBreakdown,
+    Map<String, double>? deductionBreakdown,
+    String? notes,
   }) async {
     try {
       final body = <String, dynamic>{
@@ -81,6 +77,10 @@ class PayslipService {
         'deductions': deductions,
         'overtime': overtime,
         'bonus': bonus,
+        'currency': currency,
+        if (allowanceBreakdown != null) 'allowanceBreakdown': allowanceBreakdown,
+        if (deductionBreakdown != null) 'deductionBreakdown': deductionBreakdown,
+        if (notes != null && notes.isNotEmpty) 'notes': notes,
       };
 
       final response = await _apiClient.post('/payslips', body: body);
@@ -107,6 +107,18 @@ class PayslipService {
       if (deductions != null) body['deductions'] = deductions;
       if (overtime != null) body['overtime'] = overtime;
       if (bonus != null) body['bonus'] = bonus;
+      if (allowances != null || overtime != null || bonus != null) {
+        body['allowanceBreakdown'] = {
+          if (allowances != null) 'allowances': allowances,
+          if (overtime != null) 'overtime': overtime,
+          if (bonus != null) 'bonus': bonus,
+        };
+      }
+      if (deductions != null) {
+        body['deductionBreakdown'] = {
+          'deductions': deductions,
+        };
+      }
 
       final response = await _apiClient.put('/payslips/$payslipId', body: body);
       return response.isSuccess;
@@ -164,6 +176,13 @@ class PayslipService {
             'Insurance': 2000,
             'Provident Fund': 1000,
           },
+          overtime: 0,
+          bonus: 0,
+          status: 'Paid',
+          currency: 'USD',
+          payPeriodStart: DateTime(year, i + 1, 1),
+          payPeriodEnd: DateTime(year, i + 1, 28),
+          generatedBy: 'HR',
         ),
       );
     }
@@ -190,7 +209,7 @@ class PayslipService {
       );
       return payslips.isNotEmpty ? payslips.first : null;
     } catch (e) {
-      return null;
+      throw Exception('Failed to fetch payslip by month/year: $e');
     }
   }
 
