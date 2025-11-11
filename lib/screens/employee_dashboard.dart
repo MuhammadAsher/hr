@@ -380,22 +380,39 @@ class _QuickActionCard extends StatelessWidget {
       onTap: action.onTap,
       child: Ink(
         decoration: BoxDecoration(
-          color: action.color.withOpacity(0.1),
+          color: Theme.of(context).cardColor,
           borderRadius: BorderRadius.circular(16),
+          border: Border.all(color: action.color.withOpacity(0.18), width: 1.2),
+          boxShadow: [
+            BoxShadow(
+              color: action.color.withOpacity(0.08),
+              blurRadius: 12,
+              offset: const Offset(0, 6),
+            ),
+          ],
         ),
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            mainAxisAlignment: MainAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.center,
             children: [
-              CircleAvatar(
-                backgroundColor: action.color.withOpacity(0.15),
-                child: Icon(action.icon, color: action.color),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: action.color.withOpacity(0.15),
+                  shape: BoxShape.circle,
+                ),
+                child: Icon(action.icon, color: action.color, size: 32),
               ),
+              const SizedBox(height: 12),
               Text(
                 action.title,
-                style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w600),
+                textAlign: TextAlign.center,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ],
           ),
