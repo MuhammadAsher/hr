@@ -294,7 +294,7 @@ body {
 .input-wrapper select {
     width: 100%;
     padding: var(--spacing-md);
-    padding-left: 52px;
+    padding-left: 68px;
     padding-right: var(--spacing-md);
     border: 1.5px solid var(--border-color);
     border-radius: var(--border-radius);
@@ -327,7 +327,7 @@ body {
     background-repeat: no-repeat;
     background-position: right 12px center;
     padding-right: 2.5rem;
-    padding-left: 52px;
+    padding-left: 68px;
 }
 
 /* ============================================

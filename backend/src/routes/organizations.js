@@ -110,9 +110,11 @@ router.get('/', requireSuperAdmin, async (req, res) => {
 
 // Create new organization (Super Admin only)
 router.post('/', requireSuperAdmin, createOrganizationValidation, async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await transaction.rollback();
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Invalid input data',
@@ -135,9 +137,25 @@ router.post('/', requireSuperAdmin, createOrganizationValidation, async (req, re
       website,
     } = req.body;
 
+    // Normalize and validate subscription plan
+    const limits = Organization.getSubscriptionLimits();
+    const normalizedPlan = (subscriptionPlan || 'Free').toString().trim();
+    const planKey = normalizedPlan.charAt(0).toUpperCase() + normalizedPlan.slice(1).toLowerCase();
+    const planConfig = limits[planKey];
+
+    if (!planConfig) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: `Invalid subscription plan: ${subscriptionPlan}`,
+        code: 400,
+      });
+    }
+
     // Check if organization email already exists
-    const existingOrg = await Organization.findOne({ where: { email } });
+    const existingOrg = await Organization.findOne({ where: { email }, transaction });
     if (existingOrg) {
+      await transaction.rollback();
       return res.status(409).json({
         error: 'Conflict',
         message: 'Organization with this email already exists',
@@ -146,8 +164,9 @@ router.post('/', requireSuperAdmin, createOrganizationValidation, async (req, re
     }
 
     // Check if admin email already exists
-    const existingUser = await User.findOne({ where: { email: adminEmail } });
+    const existingUser = await User.findOne({ where: { email: adminEmail }, transaction });
     if (existingUser) {
+      await transaction.rollback();
       return res.status(409).json({
         error: 'Conflict',
         message: 'User with this email already exists',
@@ -162,11 +181,11 @@ router.post('/', requireSuperAdmin, createOrganizationValidation, async (req, re
       phone,
       address,
       industry,
-      subscription_plan: subscriptionPlan,
+      subscription_plan: planKey,
       tax_id: taxId,
       website,
-      employee_limit: Organization.getSubscriptionLimits()[subscriptionPlan].employees,
-    });
+      employee_limit: planConfig.employees,
+    }, { transaction });
 
     // Create admin user
     const adminUser = await User.create({
@@ -176,10 +195,12 @@ router.post('/', requireSuperAdmin, createOrganizationValidation, async (req, re
       name: adminName,
       role: 'admin',
       email_verified: true,
-    });
+    }, { transaction });
 
     // Update organization with admin ID
-    await organization.update({ admin_id: adminUser.id });
+    await organization.update({ admin_id: adminUser.id }, { transaction });
+
+    await transaction.commit();
 
     res.status(201).json({
       data: {
@@ -193,10 +214,23 @@ router.post('/', requireSuperAdmin, createOrganizationValidation, async (req, re
       message: 'Organization created successfully',
     });
   } catch (error) {
-    console.error('Create organization error:', error);
+    await transaction.rollback();
+    console.error('Create organization error:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+    });
+
+    let message = 'Failed to create organization';
+    if (error.name === 'SequelizeValidationError') {
+      message = error.errors.map((err) => err.message).join(', ');
+    } else if (error.name === 'SequelizeUniqueConstraintError') {
+      message = 'Organization or admin email already exists';
+    }
+
     res.status(500).json({
       error: 'Internal Server Error',
-      message: 'Failed to create organization',
+      message,
       code: 500,
     });
   }
