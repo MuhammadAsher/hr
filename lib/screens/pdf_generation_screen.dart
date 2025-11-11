@@ -2,7 +2,7 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../services/pdf_service.dart';
-import '../services/employee_service.dart';
+import '../services/api_employee_service.dart';
 import '../services/department_service.dart';
 import '../services/payslip_service.dart';
 import '../models/employee.dart';
@@ -18,7 +18,7 @@ class PdfGenerationScreen extends StatefulWidget {
 
 class _PdfGenerationScreenState extends State<PdfGenerationScreen> {
   final PdfService _pdfService = PdfService();
-  final EmployeeService _employeeService = EmployeeService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
   final DepartmentService _departmentService = DepartmentService();
   final PayslipService _payslipService = PayslipService();
 
@@ -84,7 +84,7 @@ class _PdfGenerationScreenState extends State<PdfGenerationScreen> {
     setState(() => _isGenerating = true);
 
     try {
-      final employees = await _employeeService.getAllEmployees();
+      final employees = await _employeeService.getAllEmployees(limit: 1000);
       if (employees.isEmpty) {
         throw Exception('No employees found');
       }

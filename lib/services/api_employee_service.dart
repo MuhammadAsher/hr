@@ -163,7 +163,7 @@ class ApiEmployeeService {
         
         // Fallback: if total is not in response, fetch all and count
         print('⚠️ Total not found in response, fetching all employees to count...');
-        final employees = await getAllEmployees(limit: 1000);
+        final employees = await getAllEmployees(limit: 5000);
         print('✅ Total employees (counted): ${employees.length}');
         return employees.length;
       } else {

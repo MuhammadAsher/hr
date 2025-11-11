@@ -1,18 +1,23 @@
 import '../models/department.dart';
 import '../models/employee.dart';
-import 'employee_service.dart';
+import 'api_employee_service.dart';
 import 'api_client.dart';
 
 class DepartmentService {
   final ApiClient _apiClient = ApiClient();
-  final EmployeeService _employeeService = EmployeeService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
 
   // Get all departments
   Future<List<Department>> getAllDepartments({
     int page = 1,
     int limit = 10,
     String? search,
+    bool useMockData = false,
   }) async {
+    if (useMockData) {
+      return _getMockDepartments();
+    }
+
     try {
       final queryParams = <String, String>{
         'page': page.toString(),
@@ -191,8 +196,8 @@ class DepartmentService {
   }
 
   // Legacy method - now uses API
-  Future<List<Department>> getDepartments() async {
-    return await getAllDepartments();
+  Future<List<Department>> getDepartments({bool useMockData = false}) async {
+    return await getAllDepartments(useMockData: useMockData);
   }
 
   // Get department names only
@@ -209,7 +214,7 @@ class DepartmentService {
   // Get employees in a specific department
   Future<List<Employee>> getDepartmentEmployees(String departmentName) async {
     try {
-      final allEmployees = await _employeeService.getAllEmployees();
+      final allEmployees = await _employeeService.getAllEmployees(limit: 1000);
       return allEmployees
           .where((emp) => emp.department == departmentName)
           .toList();
