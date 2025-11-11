@@ -40,6 +40,12 @@ class _PayslipManagementScreenState extends State<PayslipManagementScreen> {
   List<Payslip> _payslips = [];
   List<Payslip> _filteredPayslips = [];
   String _searchQuery = '';
+  String _selectedStatus = 'All';
+  String _filterMonth = 'All';
+  String _filterYear = 'All';
+  DateTime? _filterStartDate;
+  DateTime? _filterEndDate;
+  String _sortOption = 'Newest First';
 
   @override
   void initState() {
@@ -168,7 +174,7 @@ class _PayslipManagementScreenState extends State<PayslipManagementScreen> {
     final query = _searchQuery.trim().toLowerCase();
     setState(() {
       if (query.isEmpty) {
-        _filteredPayslips = List.from(_payslips);
+        _filteredPayslips = _payslips.where(_passesFilters).toList();
       } else {
         _filteredPayslips = _payslips.where((payslip) {
           final monthMatch = payslip.month.toLowerCase().contains(query);
@@ -176,8 +182,57 @@ class _PayslipManagementScreenState extends State<PayslipManagementScreen> {
           final noteMatch = (payslip.notes ?? '').toLowerCase().contains(query);
           final currencyMatch = payslip.currency.toLowerCase().contains(query);
           final yearMatch = payslip.year.toString().contains(query);
-          return monthMatch || statusMatch || noteMatch || currencyMatch || yearMatch;
+          return (monthMatch || statusMatch || noteMatch || currencyMatch || yearMatch) &&
+              _passesFilters(payslip);
         }).toList();
+      }
+
+      _applySort();
+    });
+  }
+
+  bool _passesFilters(Payslip payslip) {
+    final statusCheck = _selectedStatus == 'All' || payslip.status.toLowerCase() == _selectedStatus.toLowerCase();
+
+    final monthCheck = _filterMonth == 'All' || payslip.month == _filterMonth;
+    final yearCheck = _filterYear == 'All' || payslip.year.toString() == _filterYear;
+
+    bool dateCheck = true;
+    if (_filterStartDate != null) {
+      final start = DateTime(_filterStartDate!.year, _filterStartDate!.month, _filterStartDate!.day);
+      final payStart = payslip.payPeriodStart ?? DateTime(payslip.year, _months.indexOf(payslip.month) + 1, 1);
+      if (payStart.isBefore(start)) {
+        dateCheck = false;
+      }
+    }
+
+    if (_filterEndDate != null && dateCheck) {
+      final end = DateTime(_filterEndDate!.year, _filterEndDate!.month, _filterEndDate!.day, 23, 59, 59);
+      final payEnd = payslip.payPeriodEnd ?? DateTime(payslip.year, _months.indexOf(payslip.month) + 1, 28);
+      if (payEnd.isAfter(end)) {
+        dateCheck = false;
+      }
+    }
+
+    return statusCheck && monthCheck && yearCheck && dateCheck;
+  }
+
+  void _applySort() {
+    _filteredPayslips.sort((a, b) {
+      switch (_sortOption) {
+        case 'Oldest First':
+          final dateA = a.payPeriodStart ?? DateTime(a.year, _months.indexOf(a.month) + 1, 1);
+          final dateB = b.payPeriodStart ?? DateTime(b.year, _months.indexOf(b.month) + 1, 1);
+          return dateA.compareTo(dateB);
+        case 'Highest Net Salary':
+          return b.netSalary.compareTo(a.netSalary);
+        case 'Lowest Net Salary':
+          return a.netSalary.compareTo(b.netSalary);
+        case 'Newest First':
+        default:
+          final dateA = a.payPeriodStart ?? DateTime(a.year, _months.indexOf(a.month) + 1, 1);
+          final dateB = b.payPeriodStart ?? DateTime(b.year, _months.indexOf(b.month) + 1, 1);
+          return dateB.compareTo(dateA);
       }
     });
   }
@@ -516,6 +571,10 @@ class _PayslipManagementScreenState extends State<PayslipManagementScreen> {
                     onChanged: _onSearchChanged,
                   ),
                 ),
+                _buildFilterChips(),
+                const SizedBox(height: 8),
+                _buildFilterSummary(),
+                const SizedBox(height: 8),
                 Expanded(
                   child: RefreshIndicator(
                     onRefresh: _loadPayslips,
@@ -678,6 +737,243 @@ class _PayslipManagementScreenState extends State<PayslipManagementScreen> {
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  Widget _buildFilterChips() {
+    return SingleChildScrollView(
+      scrollDirection: Axis.horizontal,
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Row(
+        children: [
+          _buildFilterButton(
+            icon: Icons.filter_list,
+            label: _selectedStatus,
+            onTap: () async {
+              final selected = await showModalBottomSheet<String>(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (context) => _FilterSheet(
+                  title: 'Filter by Status',
+                  options: const ['All', 'Draft', 'Processed', 'Paid'],
+                  selectedValue: _selectedStatus,
+                ),
+              );
+              if (selected != null) {
+                setState(() => _selectedStatus = selected);
+                _applyFilters();
+              }
+            },
+          ),
+          const SizedBox(width: 8),
+          _buildFilterButton(
+            icon: Icons.calendar_today,
+            label: _filterMonth,
+            onTap: () async {
+              final selected = await showModalBottomSheet<String>(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (context) => _FilterSheet(
+                  title: 'Filter by Month',
+                  options: ['All', ..._months],
+                  selectedValue: _filterMonth,
+                ),
+              );
+              if (selected != null) {
+                setState(() => _filterMonth = selected);
+                _applyFilters();
+              }
+            },
+          ),
+          const SizedBox(width: 8),
+          _buildFilterButton(
+            icon: Icons.calendar_month,
+            label: _filterYear,
+            onTap: () async {
+              final currentYear = DateTime.now().year;
+              final options = ['All', ...List.generate(6, (index) => (currentYear - 3 + index).toString())];
+              final selected = await showModalBottomSheet<String>(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (context) => _FilterSheet(
+                  title: 'Filter by Year',
+                  options: options,
+                  selectedValue: _filterYear,
+                ),
+              );
+              if (selected != null) {
+                setState(() => _filterYear = selected);
+                _applyFilters();
+              }
+            },
+          ),
+          const SizedBox(width: 8),
+          _buildFilterButton(
+            icon: Icons.date_range,
+            label: _filterStartDate == null || _filterEndDate == null
+                ? 'Date Range'
+                : '${DateFormat('MMM d').format(_filterStartDate!)} - ${DateFormat('MMM d, yyyy').format(_filterEndDate!)}',
+            onTap: () async {
+              await _showDateRangePicker();
+              _applyFilters();
+            },
+          ),
+          const SizedBox(width: 8),
+          _buildFilterButton(
+            icon: Icons.sort,
+            label: _sortOption,
+            onTap: () async {
+              final selected = await showModalBottomSheet<String>(
+                context: context,
+                shape: const RoundedRectangleBorder(
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+                ),
+                builder: (context) => _FilterSheet(
+                  title: 'Sort Payslips',
+                  options: const ['Newest First', 'Oldest First', 'Highest Net Salary', 'Lowest Net Salary'],
+                  selectedValue: _sortOption,
+                ),
+              );
+              if (selected != null) {
+                setState(() => _sortOption = selected);
+                _applySort();
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterSummary() {
+    final filters = <String>[];
+    if (_selectedStatus != 'All') filters.add('Status: $_selectedStatus');
+    if (_filterMonth != 'All') filters.add('Month: $_filterMonth');
+    if (_filterYear != 'All') filters.add('Year: $_filterYear');
+    if (_filterStartDate != null && _filterEndDate != null) {
+      filters.add(
+        'Range: ${DateFormat('MMM d').format(_filterStartDate!)} - ${DateFormat('MMM d, yyyy').format(_filterEndDate!)}',
+      );
+    }
+
+    if (filters.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16),
+      child: Wrap(
+        spacing: 8,
+        runSpacing: 4,
+        children: filters
+            .map(
+              (filter) => Chip(
+                label: Text(filter),
+                deleteIcon: const Icon(Icons.close, size: 16),
+                onDeleted: () {
+                  setState(() {
+                    if (filter.startsWith('Status')) {
+                      _selectedStatus = 'All';
+                    } else if (filter.startsWith('Month')) {
+                      _filterMonth = 'All';
+                    } else if (filter.startsWith('Year')) {
+                      _filterYear = 'All';
+                    } else {
+                      _filterStartDate = null;
+                      _filterEndDate = null;
+                    }
+                  });
+                  _applyFilters();
+                },
+              ),
+            )
+            .toList(),
+      ),
+    );
+  }
+
+  Widget _buildFilterButton({
+    required IconData icon,
+    required String label,
+    required VoidCallback onTap,
+  }) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: Icon(icon, size: 18),
+      label: Text(
+        label,
+        overflow: TextOverflow.ellipsis,
+      ),
+    );
+  }
+
+  Future<void> _showDateRangePicker() async {
+    final now = DateTime.now();
+    final firstDate = DateTime(now.year - 2);
+    final lastDate = DateTime(now.year + 1);
+
+    final range = await showDateRangePicker(
+      context: context,
+      firstDate: firstDate,
+      lastDate: lastDate,
+      initialDateRange: _filterStartDate != null && _filterEndDate != null
+          ? DateTimeRange(start: _filterStartDate!, end: _filterEndDate!)
+          : null,
+    );
+
+    if (range != null) {
+      setState(() {
+        _filterStartDate = range.start;
+        _filterEndDate = range.end;
+      });
+    }
+  }
+}
+
+class _FilterSheet extends StatelessWidget {
+  const _FilterSheet({
+    required this.title,
+    required this.options,
+    required this.selectedValue,
+  });
+
+  final String title;
+  final List<String> options;
+  final String selectedValue;
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(24, 24, 24, 12),
+            child: Text(
+              title,
+              style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                    fontWeight: FontWeight.bold,
+                  ),
+            ),
+          ),
+          ...options.map(
+            (option) => RadioListTile<String>(
+              value: option,
+              groupValue: selectedValue,
+              onChanged: (value) => Navigator.pop(context, value),
+              title: Text(option),
+            ),
+          ),
+          const SizedBox(height: 12),
+        ],
       ),
     );
   }
