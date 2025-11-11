@@ -26,14 +26,31 @@ class LeaveService {
       );
 
       if (response.isSuccess) {
-        final responseData = response.data['data'];
-        final List<dynamic> leaveRequests = responseData['leaveRequests'] ?? [];
+        final responseData = Map<String, dynamic>.from(response.data['data'] ?? {});
+        final List<dynamic> leaveRequests = (responseData['leaveRequests'] as List<dynamic>?) ?? [];
         return leaveRequests.map((json) {
-          // Convert backend format to UI format if needed
-          final mappedJson = Map<String, dynamic>.from(json);
-          if (mappedJson.containsKey('leaveType')) {
-            mappedJson['leaveType'] = _mapLeaveTypeFromBackend(mappedJson['leaveType'] as String);
+          final mappedJson = Map<String, dynamic>.from(json as Map<String, dynamic>);
+
+          final backendLeaveType = mappedJson['leaveType'] as String?;
+          if (backendLeaveType != null) {
+            mappedJson['leaveType'] = _mapLeaveTypeFromBackend(backendLeaveType);
           }
+
+          mappedJson['employeeName'] = mappedJson['employeeName'] as String? ?? 'Unknown Employee';
+          mappedJson['employeeId'] = mappedJson['employeeId'] as String? ??
+              (mappedJson['employee'] is Map<String, dynamic>
+                  ? (mappedJson['employee'] as Map<String, dynamic>)['id'] as String? ?? ''
+                  : '');
+          mappedJson['status'] = mappedJson['status'] as String? ?? 'pending';
+          mappedJson['reason'] = mappedJson['reason'] as String? ?? '';
+
+          mappedJson['startDate'] = _normalizeDate(mappedJson['startDate'], fallbackNow: true);
+          mappedJson['endDate'] = _normalizeDate(mappedJson['endDate'], fallbackNow: true);
+          mappedJson['requestDate'] = _normalizeDate(
+            mappedJson['requestDate'],
+            fallbackNow: true,
+          );
+
           return LeaveRequest.fromJson(mappedJson);
         }).toList();
       } else {
@@ -275,5 +292,28 @@ class LeaveService {
       reason: request.reason,
       employeeId: request.employeeId,
     );
+  }
+
+  String _normalizeDate(dynamic value, {bool fallbackNow = false}) {
+    if (value == null) {
+      if (fallbackNow) {
+        return DateTime.now().toIso8601String();
+      }
+      throw ArgumentError('Date value cannot be null');
+    }
+
+    if (value is String && value.isNotEmpty) {
+      return value;
+    }
+
+    if (value is DateTime) {
+      return value.toIso8601String();
+    }
+
+    if (fallbackNow) {
+      return DateTime.now().toIso8601String();
+    }
+
+    throw ArgumentError('Unsupported date value: $value');
   }
 }

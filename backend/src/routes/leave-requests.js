@@ -1,11 +1,10 @@
 const express = require('express');
 const { body, param, query, validationResult } = require('express-validator');
 const { Op } = require('sequelize');
-const { Employee, User, Organization } = require('../models');
+const { Employee, User, LeaveRequest, sequelize } = require('../models');
 const {
   authenticateToken,
   requireAdmin,
-  addOrganizationFilter,
 } = require('../middleware/auth');
 
 const router = express.Router();
@@ -27,6 +26,7 @@ const createLeaveRequestValidation = [
   body('endDate').isISO8601().withMessage('Valid end date required'),
   body('reason').trim().isLength({ min: 10, max: 500 }).withMessage('Reason must be 10-500 characters'),
   body('halfDay').optional().isBoolean().withMessage('Half day must be boolean'),
+  body('employeeId').optional().isUUID().withMessage('Valid employee ID required'),
 ];
 
 const updateLeaveRequestValidation = [
@@ -42,6 +42,31 @@ const approveRejectValidation = [
   param('leaveId').isUUID().withMessage('Valid leave request ID required'),
   body('comments').optional().trim().isLength({ max: 500 }).withMessage('Comments must be less than 500 characters'),
 ];
+
+const formatLeaveRequestResponse = (requestInstance) => {
+  if (!requestInstance) {
+    return null;
+  }
+  const leave = requestInstance.toJSON();
+  const employee = requestInstance.employee || {};
+  const approver = requestInstance.approvedBy || null;
+
+  return {
+    id: leave.id,
+    employeeId: leave.employee_id,
+    employeeName: employee.name || 'Unknown Employee',
+    leaveType: leave.leave_type,
+    startDate: leave.start_date instanceof Date ? leave.start_date.toISOString().split('T')[0] : leave.start_date,
+    endDate: leave.end_date instanceof Date ? leave.end_date.toISOString().split('T')[0] : leave.end_date,
+    reason: leave.reason,
+    status: leave.status,
+    halfDay: leave.half_day,
+    requestDate: leave.created_at instanceof Date ? leave.created_at.toISOString() : leave.created_at,
+    approvedBy: approver ? approver.name : null,
+    approvedDate: leave.approved_at ? (leave.approved_at instanceof Date ? leave.approved_at.toISOString() : leave.approved_at) : null,
+    comments: leave.comments || null,
+  };
+};
 
 /**
  * @swagger
@@ -145,21 +170,100 @@ const approveRejectValidation = [
 // Get all leave requests
 router.get('/', async (req, res) => {
   try {
-    // TODO: Implement leave request listing with filtering by status, employee, date range
+    const page = Math.max(parseInt(req.query.page, 10) || 1, 1);
+    const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 10, 1), 100);
+    const offset = (page - 1) * limit;
+
+    const statusFilter = (req.query.status || 'all').toLowerCase();
+    const leaveTypeFilter = (req.query.leaveType || 'all').toLowerCase();
+    const employeeIdFilter = req.query.employeeId || null;
+    const startDateFilter = req.query.startDate || null;
+    const endDateFilter = req.query.endDate || null;
+
+    const whereClause = {};
+
+    if (!req.user.is_super_admin) {
+      whereClause.organization_id = req.user.organization_id;
+    }
+
+    if (req.user.role === 'employee' && !req.user.is_super_admin) {
+      const employeeRecord = await Employee.findOne({
+        where: { user_id: req.user.id },
+        attributes: ['id', 'organization_id'],
+      });
+
+      if (!employeeRecord) {
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Employee profile not found',
+          code: 403,
+        });
+      }
+
+      whereClause.employee_id = employeeRecord.id;
+      whereClause.organization_id = employeeRecord.organization_id;
+    } else if (employeeIdFilter) {
+      whereClause.employee_id = employeeIdFilter;
+    }
+
+    if (statusFilter !== 'all') {
+      whereClause.status = statusFilter;
+    }
+
+    if (leaveTypeFilter !== 'all') {
+      whereClause.leave_type = leaveTypeFilter;
+    }
+
+    if (startDateFilter || endDateFilter) {
+      if (startDateFilter) {
+        whereClause.start_date = {
+          ...(whereClause.start_date || {}),
+          [Op.gte]: startDateFilter,
+        };
+      }
+      if (endDateFilter) {
+        whereClause.end_date = {
+          ...(whereClause.end_date || {}),
+          [Op.lte]: endDateFilter,
+        };
+      }
+    }
+
+    const { count, rows } = await LeaveRequest.findAndCountAll({
+      where: whereClause,
+      order: [['created_at', 'DESC']],
+      limit,
+      offset,
+      include: [
+        {
+          model: Employee,
+          as: 'employee',
+          attributes: ['id', 'name', 'organization_id'],
+        },
+        {
+          model: User,
+          as: 'approvedBy',
+          attributes: ['id', 'name'],
+        },
+      ],
+    });
+
+    const responsePayload = rows.map(formatLeaveRequestResponse);
+
     res.success({
-      leaveRequests: [],
+      leaveRequests: responsePayload,
       pagination: {
-        page: parseInt(req.query.page) || 1,
-        limit: parseInt(req.query.limit) || 10,
-        total: 0,
-        totalPages: 0
+        page,
+        limit,
+        total: count,
+        totalPages: Math.ceil(count / limit) || 0,
       },
       filters: {
-        status: req.query.status || 'all',
-        leaveType: req.query.leaveType || 'all',
-        employeeId: req.query.employeeId || 'all'
-      }
-    }, 'Leave requests listing - Ready for implementation');
+        status: statusFilter,
+        leaveType: leaveTypeFilter,
+        employeeId: employeeIdFilter || (req.user.role === 'employee' ? whereClause.employee_id : 'all'),
+      },
+    }, 'Leave requests retrieved successfully');
   } catch (error) {
     console.error('Get leave requests error:', error);
     res.error('Failed to fetch leave requests', 500);
@@ -168,9 +272,11 @@ router.get('/', async (req, res) => {
 
 // Create new leave request
 router.post('/', createLeaveRequestValidation, async (req, res) => {
+  const transaction = await sequelize.transaction();
   try {
     const errors = validationResult(req);
     if (!errors.isEmpty()) {
+      await transaction.rollback();
       return res.status(400).json({
         error: 'Validation Error',
         message: 'Invalid input data',
@@ -179,21 +285,126 @@ router.post('/', createLeaveRequestValidation, async (req, res) => {
       });
     }
 
-    // TODO: Implement leave request creation with date validation
-    res.status(201).json({
-      message: 'Leave request created successfully - Ready for implementation',
-      data: {
-        id: 'temp-id',
-        leaveType: req.body.leaveType,
-        startDate: req.body.startDate,
-        endDate: req.body.endDate,
-        reason: req.body.reason,
-        status: 'pending',
-        halfDay: req.body.halfDay || false,
-        requestedBy: req.user.userId
+    const {
+      leaveType,
+      startDate,
+      endDate,
+      reason,
+      halfDay = false,
+      employeeId,
+    } = req.body;
+
+    const parsedStart = new Date(startDate);
+    const parsedEnd = new Date(endDate);
+
+    if (Number.isNaN(parsedStart.getTime()) || Number.isNaN(parsedEnd.getTime())) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'Invalid start or end date',
+        code: 400,
+      });
+    }
+
+    if (parsedEnd < parsedStart) {
+      await transaction.rollback();
+      return res.status(400).json({
+        error: 'Validation Error',
+        message: 'End date cannot be before start date',
+        code: 400,
+      });
+    }
+
+    let targetEmployee;
+
+    if (employeeId) {
+      targetEmployee = await Employee.findByPk(employeeId, { transaction });
+      if (!targetEmployee) {
+        targetEmployee = await Employee.findOne({
+          where: { user_id: employeeId },
+          transaction,
+        });
       }
+      if (!targetEmployee) {
+        await transaction.rollback();
+        return res.status(404).json({
+          error: 'Not Found',
+          message: 'Employee not found',
+          code: 404,
+        });
+      }
+    } else {
+      targetEmployee = await Employee.findOne({
+        where: { user_id: req.user.id },
+        transaction,
+      });
+      if (!targetEmployee) {
+        await transaction.rollback();
+        return res.status(400).json({
+          error: 'Validation Error',
+          message: 'Employee profile not found for current user',
+          code: 400,
+        });
+      }
+    }
+
+    if (!req.user.is_super_admin) {
+      if (req.user.role === 'employee' && targetEmployee.user_id !== req.user.id) {
+        await transaction.rollback();
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Employees can only create leave requests for themselves',
+          code: 403,
+        });
+      }
+
+      if (targetEmployee.organization_id !== req.user.organization_id) {
+        await transaction.rollback();
+        return res.status(403).json({
+          error: 'Forbidden',
+          message: 'Employee belongs to a different organization',
+          code: 403,
+        });
+      }
+    }
+
+    const leaveRequest = await LeaveRequest.create({
+      organization_id: targetEmployee.organization_id,
+      employee_id: targetEmployee.id,
+      leave_type: leaveType,
+      start_date: parsedStart.toISOString().split('T')[0],
+      end_date: parsedEnd.toISOString().split('T')[0],
+      reason,
+      half_day: Boolean(halfDay),
+      status: 'pending',
+      requested_by: req.user.id,
+    }, { transaction });
+
+    await transaction.commit();
+
+    const createdWithRelations = await LeaveRequest.findByPk(leaveRequest.id, {
+      include: [
+        {
+          model: Employee,
+          as: 'employee',
+          attributes: ['id', 'name', 'organization_id'],
+        },
+        {
+          model: User,
+          as: 'approvedBy',
+          attributes: ['id', 'name'],
+        },
+      ],
+    });
+
+    const formatted = formatLeaveRequestResponse(createdWithRelations);
+
+    res.status(201).json({
+      message: 'Leave request created successfully',
+      data: formatted,
     });
   } catch (error) {
+    await transaction.rollback();
     console.error('Create leave request error:', error);
     res.status(500).json({
       error: 'Internal Server Error',

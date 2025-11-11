@@ -3,8 +3,8 @@ const Organization = require('./Organization');
 const User = require('./User');
 const Employee = require('./Employee');
 const Department = require('./Department');
+const LeaveRequest = require('./LeaveRequest');
 // Note: These models will be created next
-// const LeaveRequest = require('./LeaveRequest');
 // const Attendance = require('./Attendance');
 // const Task = require('./Task');
 // const Payslip = require('./Payslip');
@@ -77,6 +77,39 @@ function defineAssociations() {
     foreignKey: 'manager_id',
     as: 'managedDepartments',
   });
+
+  // Leave request associations
+  Organization.hasMany(LeaveRequest, {
+    foreignKey: 'organization_id',
+    as: 'leaveRequests',
+    onDelete: 'CASCADE',
+  });
+
+  LeaveRequest.belongsTo(Organization, {
+    foreignKey: 'organization_id',
+    as: 'organization',
+  });
+
+  Employee.hasMany(LeaveRequest, {
+    foreignKey: 'employee_id',
+    as: 'leaveRequests',
+    onDelete: 'CASCADE',
+  });
+
+  LeaveRequest.belongsTo(Employee, {
+    foreignKey: 'employee_id',
+    as: 'employee',
+  });
+
+  LeaveRequest.belongsTo(User, {
+    foreignKey: 'requested_by',
+    as: 'requestedBy',
+  });
+
+  LeaveRequest.belongsTo(User, {
+    foreignKey: 'approved_by',
+    as: 'approvedBy',
+  });
 }
 
 // Initialize associations
@@ -88,5 +121,6 @@ module.exports = {
   User,
   Employee,
   Department,
+  LeaveRequest,
   // Additional models will be added as we create them
 };
