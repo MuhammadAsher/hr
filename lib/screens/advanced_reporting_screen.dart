@@ -442,125 +442,8 @@ class _AdvancedReportingScreenState extends State<AdvancedReportingScreen>
       ),
       body: Column(
         children: [
-          // Filters Section
-          Container(
-            padding: const EdgeInsets.all(16.0),
-            color: Colors.grey[50],
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  'Filters',
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-                const SizedBox(height: 12),
-                Wrap(
-                  spacing: 12,
-                  runSpacing: 8,
-                  children: [
-                    // Department Filter
-                    SizedBox(
-                      width: 150,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedDepartment,
-                        decoration: const InputDecoration(
-                          labelText: 'Department',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        items: [
-                          const DropdownMenuItem(
-                            value: null,
-                            child: Text('All Departments'),
-                          ),
-                          ..._departments.map(
-                            (dept) => DropdownMenuItem(
-                              value: dept,
-                              child: Text(dept),
-                            ),
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _selectedDepartment = value),
-                      ),
-                    ),
-
-                    // Status Filter
-                    SizedBox(
-                      width: 120,
-                      child: DropdownButtonFormField<String>(
-                        value: _selectedStatus,
-                        decoration: const InputDecoration(
-                          labelText: 'Status',
-                          border: OutlineInputBorder(),
-                          contentPadding: EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 8,
-                          ),
-                        ),
-                        items: const [
-                          DropdownMenuItem(
-                            value: null,
-                            child: Text('All Status'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Active',
-                            child: Text('Active'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Inactive',
-                            child: Text('Inactive'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Pending',
-                            child: Text('Pending'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Approved',
-                            child: Text('Approved'),
-                          ),
-                          DropdownMenuItem(
-                            value: 'Rejected',
-                            child: Text('Rejected'),
-                          ),
-                        ],
-                        onChanged: (value) =>
-                            setState(() => _selectedStatus = value),
-                      ),
-                    ),
-
-                    // Date Range Filter
-                    SizedBox(
-                      width: 200,
-                      child: OutlinedButton.icon(
-                        onPressed: _selectDateRange,
-                        icon: const Icon(Icons.date_range),
-                        label: Text(
-                          _dateRange == null
-                              ? 'Select Date Range'
-                              : '${_dateRange!.start.day}/${_dateRange!.start.month} - ${_dateRange!.end.day}/${_dateRange!.end.month}',
-                        ),
-                      ),
-                    ),
-
-                    // Clear Filters
-                    OutlinedButton.icon(
-                      onPressed: _clearFilters,
-                      icon: const Icon(Icons.clear),
-                      label: const Text('Clear'),
-                    ),
-                  ],
-                ),
-              ],
-            ),
-          ),
-
-          // Content
+          _buildFilterPanel(context),
+          const SizedBox(height: 16),
           Expanded(
             child: TabBarView(
               controller: _tabController,
@@ -598,6 +481,136 @@ class _AdvancedReportingScreenState extends State<AdvancedReportingScreen>
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildFilterPanel(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: Colors.white,
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.02),
+            blurRadius: 12,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Filters',
+            style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  fontWeight: FontWeight.w600,
+                ),
+          ),
+          const SizedBox(height: 16),
+          _buildDropdownField(
+            label: 'Department',
+            value: _selectedDepartment,
+            items: [
+              const DropdownMenuItem<String?>(
+                value: null,
+                child: Text('All Departments'),
+              ),
+              ..._departments.map(
+                (dept) => DropdownMenuItem<String?>(
+                  value: dept,
+                  child: Text(dept),
+                ),
+              ),
+            ],
+            onChanged: (value) => setState(() => _selectedDepartment = value),
+          ),
+          const SizedBox(height: 12),
+          _buildDropdownField(
+            label: 'Status',
+            value: _selectedStatus,
+            items: const [
+              DropdownMenuItem<String?>(
+                value: null,
+                child: Text('All Status'),
+              ),
+              DropdownMenuItem<String?>(value: 'Active', child: Text('Active')),
+              DropdownMenuItem<String?>(
+                  value: 'Inactive', child: Text('Inactive')),
+              DropdownMenuItem<String?>(value: 'Pending', child: Text('Pending')),
+              DropdownMenuItem<String?>(
+                  value: 'Approved', child: Text('Approved')),
+              DropdownMenuItem<String?>(
+                  value: 'Rejected', child: Text('Rejected')),
+            ],
+            onChanged: (value) => setState(() => _selectedStatus = value),
+          ),
+          const SizedBox(height: 16),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed: _selectDateRange,
+                icon: const Icon(Icons.date_range),
+                label: Text(
+                  _dateRange == null
+                      ? 'Select Date Range'
+                      : '${_dateRange!.start.day}/${_dateRange!.start.month} - ${_dateRange!.end.day}/${_dateRange!.end.month}',
+                ),
+              ),
+              OutlinedButton.icon(
+                onPressed: _clearFilters,
+                icon: const Icon(Icons.refresh),
+                label: const Text('Reset'),
+              ),
+            ],
+          ),
+          if (_dateRange != null)
+            Padding(
+              padding: const EdgeInsets.only(top: 12),
+              child: Chip(
+                label: Text(
+                  'Range: ${_dateRange!.start.day}/${_dateRange!.start.month}/${_dateRange!.start.year} - '
+                  '${_dateRange!.end.day}/${_dateRange!.end.month}/${_dateRange!.end.year}',
+                ),
+                onDeleted: () => setState(() => _dateRange = null),
+                deleteIcon: const Icon(Icons.close),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDropdownField({
+    required String label,
+    required String? value,
+    required List<DropdownMenuItem<String?>> items,
+    required ValueChanged<String?> onChanged,
+  }) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          label,
+          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                color: Colors.grey[600],
+                fontWeight: FontWeight.w600,
+              ),
+        ),
+        const SizedBox(height: 6),
+        DropdownButtonFormField<String?>(
+          value: value,
+          isExpanded: true,
+          icon: const Icon(Icons.keyboard_arrow_down_rounded),
+          decoration: const InputDecoration(
+            border: OutlineInputBorder(),
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+          ),
+          items: items,
+          onChanged: onChanged,
+        ),
+      ],
     );
   }
 
