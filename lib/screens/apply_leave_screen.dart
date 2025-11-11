@@ -13,6 +13,32 @@ class ApplyLeaveScreen extends StatefulWidget {
   State<ApplyLeaveScreen> createState() => _ApplyLeaveScreenState();
 }
 
+Color _getStatusColor(String status) {
+  switch (status) {
+    case 'Pending':
+      return Colors.orange;
+    case 'Approved':
+      return Colors.green;
+    case 'Rejected':
+      return Colors.red;
+    default:
+      return Colors.grey;
+  }
+}
+
+IconData _getStatusIcon(String status) {
+  switch (status) {
+    case 'Pending':
+      return Icons.pending;
+    case 'Approved':
+      return Icons.check_circle;
+    case 'Rejected':
+      return Icons.cancel;
+    default:
+      return Icons.help;
+  }
+}
+
 class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
   final _formKey = GlobalKey<FormState>();
   final _reasonController = TextEditingController();
@@ -144,6 +170,17 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
       appBar: AppBar(
         title: const Text('Apply for Leave'),
       ),
+      floatingActionButton: FloatingActionButton.extended(
+        onPressed: () {
+          Navigator.of(context).push(
+            MaterialPageRoute(
+              builder: (_) => const MyLeaveRequestsScreen(),
+            ),
+          );
+        },
+        icon: const Icon(Icons.list_alt),
+        label: const Text('My Requests'),
+      ),
       body: SingleChildScrollView(
         child: Column(
           children: [
@@ -258,92 +295,145 @@ class _ApplyLeaveScreenState extends State<ApplyLeaveScreen> {
                 ),
               ),
             ),
-
-            // My Leave Requests
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16),
-              child: Row(
-                children: [
-                  Text(
-                    'My Leave Requests',
-                    style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                          fontWeight: FontWeight.bold,
-                        ),
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 8),
-            _myLeaveRequests.isEmpty
-                ? const Padding(
-                    padding: EdgeInsets.all(32),
-                    child: Text('No leave requests yet'),
-                  )
-                : ListView.builder(
-                    shrinkWrap: true,
-                    physics: const NeverScrollableScrollPhysics(),
-                    padding: const EdgeInsets.symmetric(horizontal: 16),
-                    itemCount: _myLeaveRequests.length,
-                    itemBuilder: (context, index) {
-                      final request = _myLeaveRequests[index];
-                      return Card(
-                        margin: const EdgeInsets.only(bottom: 12),
-                        child: ListTile(
-                          leading: CircleAvatar(
-                            backgroundColor: _getStatusColor(request.status),
-                            child: Icon(
-                              _getStatusIcon(request.status),
-                              color: Colors.white,
-                              size: 20,
-                            ),
-                          ),
-                          title: Text(request.leaveType),
-                          subtitle: Text(
-                            '${DateFormat('MMM dd').format(request.startDate)} - ${DateFormat('MMM dd, yyyy').format(request.endDate)} (${request.daysCount} days)',
-                          ),
-                          trailing: Chip(
-                            label: Text(
-                              request.status,
-                              style: const TextStyle(fontSize: 12),
-                            ),
-                            backgroundColor:
-                                _getStatusColor(request.status).withOpacity(0.2),
-                          ),
-                        ),
-                      );
-                    },
-                  ),
             const SizedBox(height: 16),
           ],
         ),
       ),
     );
   }
+}
 
-  Color _getStatusColor(String status) {
-    switch (status) {
-      case 'Pending':
-        return Colors.orange;
-      case 'Approved':
-        return Colors.green;
-      case 'Rejected':
-        return Colors.red;
-      default:
-        return Colors.grey;
+class MyLeaveRequestsScreen extends StatefulWidget {
+  const MyLeaveRequestsScreen({super.key});
+
+  @override
+  State<MyLeaveRequestsScreen> createState() => _MyLeaveRequestsScreenState();
+}
+
+class _MyLeaveRequestsScreenState extends State<MyLeaveRequestsScreen> {
+  final LeaveService _leaveService = LeaveService();
+  List<LeaveRequest> _requests = [];
+  bool _isLoading = true;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadRequests();
+  }
+
+  Future<void> _loadRequests() async {
+    try {
+      final authProvider = Provider.of<AuthProvider>(context, listen: false);
+      final data = await _leaveService.getLeaveRequestsByEmployee(
+        authProvider.currentUser!.id,
+      );
+      if (mounted) {
+        setState(() {
+          _requests = data;
+          _isLoading = false;
+        });
+      }
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
     }
   }
 
-  IconData _getStatusIcon(String status) {
-    switch (status) {
-      case 'Pending':
-        return Icons.pending;
-      case 'Approved':
-        return Icons.check_circle;
-      case 'Rejected':
-        return Icons.cancel;
-      default:
-        return Icons.help;
-    }
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('My Leave Requests'),
+      ),
+      body: RefreshIndicator(
+        onRefresh: _loadRequests,
+        child: _isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : _requests.isEmpty
+                ? const ListEmptyState(message: 'No leave requests yet')
+                : ListView.separated(
+                    padding: const EdgeInsets.all(16),
+                    itemCount: _requests.length,
+                    separatorBuilder: (_, __) => const SizedBox(height: 12),
+                    itemBuilder: (context, index) {
+                      final request = _requests[index];
+                      return Card(
+                        elevation: 0,
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          side: BorderSide(
+                            color: _getStatusColor(request.status).withOpacity(0.2),
+                          ),
+                        ),
+                        child: ListTile(
+                          contentPadding: const EdgeInsets.all(16),
+                          leading: CircleAvatar(
+                            backgroundColor: _getStatusColor(request.status).withOpacity(0.1),
+                            child: Icon(
+                              _getStatusIcon(request.status),
+                              color: _getStatusColor(request.status),
+                            ),
+                          ),
+                          title: Text(
+                            request.leaveType,
+                            style: const TextStyle(fontWeight: FontWeight.w600),
+                          ),
+                          subtitle: Padding(
+                            padding: const EdgeInsets.only(top: 4),
+                            child: Text(
+                              '${DateFormat('MMM dd').format(request.startDate)} - ${DateFormat('MMM dd, yyyy').format(request.endDate)} • ${request.daysCount} day(s)',
+                            ),
+                          ),
+                          trailing: Chip(
+                            label: Text(
+                              request.status,
+                              style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                            backgroundColor: _getStatusColor(request.status).withOpacity(0.15),
+                          ),
+                        ),
+                      );
+                    },
+                  ),
+      ),
+    );
   }
 }
+
+class ListEmptyState extends StatelessWidget {
+  const ListEmptyState({required this.message, super.key});
+
+  final String message;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(
+              Icons.inbox_outlined,
+              size: 48,
+              color: Colors.grey[400],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              message,
+              style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: Colors.grey[600],
+                  ),
+              textAlign: TextAlign.center,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 
