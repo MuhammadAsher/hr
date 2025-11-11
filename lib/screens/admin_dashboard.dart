@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/user.dart';
+import '../models/user_role.dart';
+import '../providers/theme_provider.dart';
 import '../services/api_employee_service.dart';
 import '../services/department_service.dart';
 import '../services/leave_service.dart';
@@ -385,92 +387,280 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   }
 
   Widget _buildProfileTab(BuildContext context, AuthProvider authProvider, User? user) {
+    if (user == null) {
+      return const Center(child: Text('User information unavailable'));
+    }
+
+    final themeProvider = Provider.of<ThemeProvider>(context);
+    final infoRows = <_ProfileInfoRow>[
+      _ProfileInfoRow(
+        icon: Icons.verified_user,
+        label: 'Account Type',
+        value: _formatRole(user.role),
+      ),
+      if ((user.organizationName ?? '').isNotEmpty)
+        _ProfileInfoRow(
+          icon: Icons.apartment,
+          label: 'Organization',
+          value: user.organizationName!,
+        ),
+      _ProfileInfoRow(
+        icon: Icons.alternate_email,
+        label: 'Email',
+        value: user.email,
+      ),
+    ];
+
     return SingleChildScrollView(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Card(
-            elevation: 2,
-            child: Padding(
-              padding: const EdgeInsets.all(24.0),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        radius: 32,
-                        backgroundColor: Theme.of(context).primaryColor,
-                        child: Text(
-                          user?.name.substring(0, 1).toUpperCase() ?? 'A',
-                          style: const TextStyle(fontSize: 26, color: Colors.white, fontWeight: FontWeight.bold),
-                        ),
-                      ),
-                      const SizedBox(width: 16),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              user?.name ?? 'Admin',
-                              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 4),
-                            Text(user?.email ?? '', style: TextStyle(color: Colors.grey[600])),
-                            const SizedBox(height: 4),
-                            Chip(
-                              label: Text((user?.role.name ?? 'admin').toUpperCase()),
-                              backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
-                            ),
-                          ],
-                        ),
-                      )
-                    ],
-                  ),
-                  const SizedBox(height: 24),
-                  ListTile(
-                    leading: const Icon(Icons.lock_outline),
-                    title: const Text('Change Password'),
-                    subtitle: const Text('Update your account security'),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Change password coming soon')),);
-                    },
-                  ),
-                  ListTile(
-                    leading: const Icon(Icons.settings_outlined),
-                    title: const Text('Account Settings'),
-                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-                    onTap: () {
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('Account settings coming soon')),);
-                    },
-                  ),
-                  const Divider(),
-                  SizedBox(
-                    width: double.infinity,
-                    child: ElevatedButton.icon(
-                      onPressed: () async {
-                        await authProvider.logout();
-                      },
-                      icon: const Icon(Icons.logout_rounded),
-                      label: const Text('Logout'),
-                      style: ElevatedButton.styleFrom(
-                        backgroundColor: Colors.redAccent,
-                        foregroundColor: Colors.white,
-                        padding: const EdgeInsets.symmetric(vertical: 14),
-                      ),
-                    ),
-                  ),
-                ],
+          _buildProfileHeader(context, user),
+          const SizedBox(height: 24),
+          _buildInfoSection(context, infoRows),
+          const SizedBox(height: 24),
+          _buildPreferencesSection(context, themeProvider),
+          const SizedBox(height: 24),
+          SizedBox(
+            width: double.infinity,
+            child: FilledButton.icon(
+              onPressed: () async {
+                await authProvider.logout();
+              },
+              icon: const Icon(Icons.logout_rounded),
+              label: const Text('Logout'),
+              style: FilledButton.styleFrom(
+                padding: const EdgeInsets.symmetric(vertical: 16),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
+                backgroundColor: Theme.of(context).colorScheme.error,
+                foregroundColor: Theme.of(context).colorScheme.onError,
               ),
             ),
           ),
         ],
       ),
     );
+  }
+
+  Widget _buildProfileHeader(BuildContext context, User user) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final name = user.name; 
+    final fallbackInitial = user.email.isNotEmpty ? user.email[0] : '?';
+    final initials = name.isNotEmpty ? name[0] : fallbackInitial;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(24),
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(24),
+        gradient: LinearGradient(
+          colors: [
+            colorScheme.primary.withOpacity(0.12),
+            colorScheme.secondary.withOpacity(0.08),
+          ],
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        border: Border.all(color: colorScheme.primary.withOpacity(0.08)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              CircleAvatar(
+                radius: 36,
+                backgroundColor: colorScheme.primary,
+                child: Text(
+                  initials.toUpperCase(),
+                  style: TextStyle(
+                    color: colorScheme.onPrimary,
+                    fontSize: 28,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 18),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      name.isNotEmpty ? name : 'Administrator',
+                      style: Theme.of(context)
+                          .textTheme
+                          .headlineSmall
+                          ?.copyWith(fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 6),
+                    Text(
+                      user.email,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodyMedium
+                          ?.copyWith(color: colorScheme.onSurfaceVariant),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+          Wrap(
+            spacing: 12,
+            runSpacing: 8,
+            children: [
+              _buildProfileBadge(
+                context,
+                icon: Icons.verified_user,
+                label: _formatRole(user.role),
+                color: colorScheme.primary,
+              ),
+              if ((user.organizationName ?? '').isNotEmpty)
+                _buildProfileBadge(
+                  context,
+                  icon: Icons.apartment,
+                  label: user.organizationName!,
+                  color: colorScheme.secondary,
+                ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoSection(BuildContext context, List<_ProfileInfoRow> rows) {
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+        child: Column(
+          children: [
+            for (int i = 0; i < rows.length; i++) ...[
+              _buildInfoRow(context, rows[i]),
+              if (i != rows.length - 1)
+                const Divider(height: 24, thickness: 0.6),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildInfoRow(BuildContext context, _ProfileInfoRow row) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Container(
+          padding: const EdgeInsets.all(12),
+          decoration: BoxDecoration(
+            color: colorScheme.primary.withOpacity(0.12),
+            borderRadius: BorderRadius.circular(14),
+          ),
+          child: Icon(row.icon, color: colorScheme.primary, size: 22),
+        ),
+        const SizedBox(width: 16),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                row.label,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+              ),
+              const SizedBox(height: 6),
+              Text(
+                row.value,
+                style: Theme.of(context)
+                    .textTheme
+                    .titleMedium
+                    ?.copyWith(fontWeight: FontWeight.w700),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPreferencesSection(BuildContext context, ThemeProvider themeProvider) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Card(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+        child: Column(
+          children: [
+            SwitchListTile.adaptive(
+              value: themeProvider.isDarkMode,
+              onChanged: (value) => themeProvider.toggleTheme(value),
+              title: const Text('Dark Mode'),
+              subtitle: const Text('Toggle a darker color palette across the app'),
+              secondary: Icon(
+                themeProvider.isDarkMode ? Icons.dark_mode : Icons.light_mode,
+                color: colorScheme.primary,
+              ),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12),
+            ),
+            const Divider(indent: 12, endIndent: 12, thickness: 0.6),
+            ListTile(
+              leading: Icon(Icons.lock_reset, color: colorScheme.primary),
+              title: const Text('Change Password'),
+              subtitle: const Text('Update your account security settings'),
+              trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+              onTap: () {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('Change password coming soon')),
+                );
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildProfileBadge(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required Color color,
+  }) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+      decoration: BoxDecoration(
+        color: color.withOpacity(0.15),
+        borderRadius: BorderRadius.circular(20),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, color: color, size: 18),
+          const SizedBox(width: 6),
+          Text(
+            label,
+            style: TextStyle(
+              color: color,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  String _formatRole(UserRole role) {
+    final formatted = role.name.replaceAll('_', ' ');
+    return formatted
+        .split(' ')
+        .map((word) => word.isEmpty ? word : word[0].toUpperCase() + word.substring(1))
+        .join(' ');
   }
 
   List<_QuickAction> _buildQuickActions(BuildContext context) {
@@ -707,4 +897,16 @@ class _DashboardMetric {
   final String value;
   final IconData icon;
   final Color color;
+}
+
+class _ProfileInfoRow {
+  const _ProfileInfoRow({
+    required this.icon,
+    required this.label,
+    required this.value,
+  });
+
+  final IconData icon;
+  final String label;
+  final String value;
 }

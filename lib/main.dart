@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'providers/auth_provider.dart';
+import 'providers/theme_provider.dart';
 import 'screens/login_screen.dart';
 import 'screens/admin_dashboard.dart';
 import 'screens/employee_dashboard.dart';
@@ -21,27 +22,62 @@ void main() async {
   runApp(const MyApp());
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends StatefulWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
-    // Create global navigator key for error service
-    final navigatorKey = GlobalKey<NavigatorState>();
-    ErrorService.navigatorKey = navigatorKey;
+  State<MyApp> createState() => _MyAppState();
+}
 
-    return ChangeNotifierProvider(
-      create: (_) => AuthProvider(),
-      child: MaterialApp(
-        title: 'HR Management',
-        debugShowCheckedModeBanner: false,
-        navigatorKey: navigatorKey,
-        navigatorObservers: [routeObserver],
-        theme: ThemeData(
-          colorScheme: ColorScheme.fromSeed(seedColor: Colors.blue),
-          useMaterial3: true,
-        ),
-        home: const AuthWrapper(),
+class _MyAppState extends State<MyApp> {
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+  @override
+  Widget build(BuildContext context) {
+    ErrorService.navigatorKey = _navigatorKey;
+
+    final lightTheme = ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.blue,
+        brightness: Brightness.light,
+      ),
+      scaffoldBackgroundColor: const Color(0xFFF5F7FB),
+      useMaterial3: true,
+    );
+
+    final darkTheme = ThemeData(
+      colorScheme: ColorScheme.fromSeed(
+        seedColor: Colors.blue,
+        brightness: Brightness.dark,
+      ),
+      scaffoldBackgroundColor: const Color(0xFF0B1220),
+      useMaterial3: true,
+    );
+
+    return MultiProvider(
+      providers: [
+        ChangeNotifierProvider(create: (_) => ThemeProvider()),
+        ChangeNotifierProvider(create: (_) => AuthProvider()),
+      ],
+      child: Consumer<ThemeProvider>(
+        builder: (context, themeProvider, _) {
+          final materialApp = MaterialApp(
+            title: 'HR Management',
+            debugShowCheckedModeBanner: false,
+            navigatorKey: _navigatorKey,
+            navigatorObservers: [routeObserver],
+            theme: lightTheme,
+            darkTheme: darkTheme,
+            themeMode: themeProvider.themeMode,
+            home: themeProvider.isInitialized
+                ? const AuthWrapper()
+                : const Scaffold(
+                    body: Center(child: CircularProgressIndicator()),
+                  ),
+          );
+
+          return materialApp;
+        },
       ),
     );
   }
