@@ -518,8 +518,8 @@ body {
     display: flex;
     align-items: center;
     gap: var(--spacing-md);
-    padding: var(--spacing-md) var(--spacing-lg);
-    border-radius: var(--border-radius);
+    padding: var(--spacing-md) calc(var(--spacing-lg) * 1.1);
+    border-radius: 18px;
     color: rgba(255, 255, 255, 0.7);
     text-decoration: none;
     transition: var(--transition);
@@ -527,36 +527,15 @@ body {
     position: relative;
 }
 
-.nav-item::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 50%;
-    transform: translateY(-50%);
-    width: 3px;
-    height: 0;
-    background: var(--primary);
-    border-radius: 0 3px 3px 0;
-    transition: height 0.3s ease;
-}
-
 .nav-item:hover {
     background: var(--bg-sidebar-hover);
     color: var(--text-white);
-    transform: translateX(4px);
-}
-
-.nav-item:hover::before {
-    height: 60%;
+    transform: translateX(2px);
 }
 
 .nav-item.active {
     background: var(--primary);
     color: var(--text-white);
-}
-
-.nav-item.active::before {
-    height: 100%;
 }
 
 .sidebar-footer {
@@ -1543,26 +1522,14 @@ body {
 }
 
 .sidebar-nav-item::before, .nav-item::before {
-    content: '';
-    position: absolute;
-    left: 0;
-    top: 0;
-    height: 100%;
-    width: 3px;
-    background: var(--primary);
-    transform: scaleY(0);
-    transition: transform 0.2s ease;
+    content: none;
 }
 
-.sidebar-nav-item:hover::before,
-.sidebar-nav-item.active::before,
-.nav-item:hover::before,
-.nav-item.active::before {
-    transform: scaleY(1);
-}
-
-.sidebar-nav-item:hover, .nav-item:hover {
-    transform: translateX(4px);
+.sidebar-nav-item:hover,
+.sidebar-nav-item.active,
+.nav-item:hover,
+.nav-item.active {
+    transform: translateX(2px);
 }
 
 /* Dashboard Main Content Animation */
