@@ -1,22 +1,24 @@
+import 'package:intl/intl.dart';
+
+import '../models/attendance.dart';
 import '../models/employee.dart';
 import '../models/leave_request.dart';
-import '../models/attendance.dart';
 import '../models/department.dart';
-import 'employee_service.dart';
+import 'api_employee_service.dart';
 import 'leave_service.dart';
 import 'attendance_service.dart';
 import 'department_service.dart';
 
 class AnalyticsService {
-  final EmployeeService _employeeService = EmployeeService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
   final LeaveService _leaveService = LeaveService();
   final AttendanceService _attendanceService = AttendanceService();
   final DepartmentService _departmentService = DepartmentService();
 
   // Employee Analytics
   Future<Map<String, dynamic>> getEmployeeAnalytics() async {
-    final employees = await _employeeService.getAllEmployees();
-    final departments = await _departmentService.getAllDepartments();
+    final employees = await _employeeService.getAllEmployees(limit: 2000);
+    final departments = await _departmentService.getAllDepartments(limit: 500);
 
     // Department distribution
     final departmentCounts = <String, int>{};
@@ -70,7 +72,7 @@ class AnalyticsService {
 
   // Leave Analytics
   Future<Map<String, dynamic>> getLeaveAnalytics() async {
-    final leaveRequests = await _leaveService.getAllLeaveRequests();
+    final leaveRequests = await _leaveService.getAllLeaveRequests(limit: 1000);
 
     // Status distribution
     final statusCounts = <String, int>{};
@@ -122,11 +124,8 @@ class AnalyticsService {
 
   // Attendance Analytics
   Future<Map<String, dynamic>> getAttendanceAnalytics() async {
-    // For demo purposes, use empty list
-    final attendanceRecords = <dynamic>[];
-    final employees = await _employeeService.getAllEmployees();
-
-    if (attendanceRecords.isEmpty) {
+    final records = await _attendanceService.getAttendanceRecords(limit: 1000);
+    if (records.isEmpty) {
       return {
         'averageAttendanceRate': 0.0,
         'departmentAttendance': <String, double>{},
@@ -135,83 +134,68 @@ class AnalyticsService {
       };
     }
 
-    // Overall attendance rate
-    final presentRecords = attendanceRecords
-        .where((r) => r.status == 'Present')
-        .length;
-    final overallRate = (presentRecords / attendanceRecords.length) * 100;
+    final employees = await _employeeService.getAllEmployees(limit: 2000);
+    final employeeDepartment = {
+      for (final employee in employees) employee.id: employee.department,
+    };
 
-    // Department-wise attendance
+    final presentRecords = records.where((r) => r.status == 'Present').length;
+    final overallRate = (presentRecords / records.length) * 100;
+
     final departmentAttendance = <String, List<double>>{};
-
-    for (var record in attendanceRecords) {
-      final employee = employees.firstWhere(
-        (e) => e.id == record.employeeId,
-        orElse: () => Employee(
-          id: '',
-          name: '',
-          email: '',
-          department: 'Unknown',
-          position: '',
-          phone: '',
-          joinDate: DateTime.now(),
-          salary: 0,
-        ),
-      );
-
-      if (!departmentAttendance.containsKey(employee.department)) {
-        departmentAttendance[employee.department] = [];
-      }
-
-      departmentAttendance[employee.department]!.add(
-        record.status == 'Present' ? 1.0 : 0.0,
-      );
+    for (final record in records) {
+      final department = employeeDepartment[record.employeeId] ?? 'Unknown';
+      departmentAttendance.putIfAbsent(department, () => []);
+      departmentAttendance[department]!.add(record.status == 'Present'
+          ? 1.0
+          : record.status == 'Half Day'
+              ? 0.5
+              : 0.0);
     }
 
     final departmentRates = <String, double>{};
     departmentAttendance.forEach((dept, rates) {
       departmentRates[dept] =
-          (rates.reduce((a, b) => a + b) / rates.length) * 100;
+          rates.isEmpty ? 0.0 : (rates.reduce((a, b) => a + b) / rates.length) * 100;
     });
 
-    // Monthly trends
     final now = DateTime.now();
-    final monthlyData = <String, List<double>>{};
-
+    final monthlyBuckets = <String, List<double>>{};
     for (int i = 11; i >= 0; i--) {
       final month = DateTime(now.year, now.month - i, 1);
-      final monthKey =
-          '${month.year}-${month.month.toString().padLeft(2, '0')}';
-      monthlyData[monthKey] = [];
+      final key = '${month.year}-${month.month.toString().padLeft(2, '0')}';
+      monthlyBuckets[key] = [];
     }
 
-    for (var record in attendanceRecords) {
-      final monthKey =
-          '${record.date.year}-${record.date.month.toString().padLeft(2, '0')}';
-      if (monthlyData.containsKey(monthKey)) {
-        monthlyData[monthKey]!.add(record.status == 'Present' ? 1.0 : 0.0);
+    for (final record in records) {
+      final key = '${record.date.year}-${record.date.month.toString().padLeft(2, '0')}';
+      if (monthlyBuckets.containsKey(key)) {
+        monthlyBuckets[key]!.add(record.status == 'Present'
+            ? 1.0
+            : record.status == 'Half Day'
+                ? 0.5
+                : 0.0);
       }
     }
 
     final monthlyRates = <String, double>{};
-    monthlyData.forEach((month, rates) {
-      monthlyRates[month] = rates.isEmpty
-          ? 0.0
-          : (rates.reduce((a, b) => a + b) / rates.length) * 100;
+    monthlyBuckets.forEach((month, rates) {
+      monthlyRates[month] =
+          rates.isEmpty ? 0.0 : (rates.reduce((a, b) => a + b) / rates.length) * 100;
     });
 
     return {
       'averageAttendanceRate': overallRate,
       'departmentAttendance': departmentRates,
       'monthlyTrends': monthlyRates,
-      'totalRecords': attendanceRecords.length,
+      'totalRecords': records.length,
     };
   }
 
   // Department Analytics
   Future<Map<String, dynamic>> getDepartmentAnalytics() async {
-    final departments = await _departmentService.getAllDepartments();
-    final employees = await _employeeService.getAllEmployees();
+    final departments = await _departmentService.getAllDepartments(limit: 500);
+    final employees = await _employeeService.getAllEmployees(limit: 2000);
 
     // Size distribution
     final sizeRanges = <String, int>{
@@ -263,21 +247,21 @@ class AnalyticsService {
 
   // Dashboard Summary
   Future<Map<String, dynamic>> getDashboardSummary() async {
-    final employees = await _employeeService.getAllEmployees();
-    final departments = await _departmentService.getAllDepartments();
-    final leaveRequests = await _leaveService.getAllLeaveRequests();
-    // For demo purposes, use empty list
-    final attendanceRecords = <dynamic>[];
+    final employees = await _employeeService.getAllEmployees(limit: 2000);
+    final departments = await _departmentService.getAllDepartments(limit: 500);
+    final leaveRequests = await _leaveService.getAllLeaveRequests(limit: 1000);
+    final attendanceRecords = await _attendanceService.getAttendanceRecords(limit: 1000);
 
     final pendingLeaves = leaveRequests
         .where((r) => r.status == 'Pending')
         .length;
+    final today = DateTime.now();
     final presentToday = attendanceRecords
         .where(
           (r) =>
-              r.date.day == DateTime.now().day &&
-              r.date.month == DateTime.now().month &&
-              r.date.year == DateTime.now().year &&
+              r.date.year == today.year &&
+              r.date.month == today.month &&
+              r.date.day == today.day &&
               r.status == 'Present',
         )
         .length;
