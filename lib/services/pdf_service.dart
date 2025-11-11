@@ -8,6 +8,7 @@ import '../models/employee.dart';
 import '../models/payslip.dart';
 import '../models/leave_request.dart';
 import '../models/department.dart';
+import 'package:intl/intl.dart';
 
 class PdfService {
   // Generate Employee Report PDF
@@ -418,6 +419,248 @@ class PdfService {
     );
 
     return pdf.save();
+  }
+
+  Future<Uint8List> generateCustomReport({
+    required List<Employee> employees,
+    required List<Department> departments,
+    required List<Payslip> payslips,
+    required bool includeEmployees,
+    required bool includeDepartments,
+    required bool includePayroll,
+    DateTime? startDate,
+    DateTime? endDate,
+  }) async {
+    final pdf = pw.Document();
+    final dateFormatter = DateFormat('MMM dd, yyyy');
+
+    final totalNetSalary = payslips.fold<double>(0, (sum, p) => sum + p.netSalary);
+    final payPeriodStart = startDate != null ? dateFormatter.format(startDate) : null;
+    final payPeriodEnd = endDate != null ? dateFormatter.format(endDate) : null;
+
+    pdf.addPage(
+      pw.MultiPage(
+        pageFormat: PdfPageFormat.a4,
+        margin: const pw.EdgeInsets.all(24),
+        build: (context) {
+          final widgets = <pw.Widget>[
+            pw.Header(
+              level: 0,
+              child: pw.Text(
+                'Custom HR Report',
+                style: pw.TextStyle(fontSize: 24, fontWeight: pw.FontWeight.bold),
+              ),
+            ),
+            pw.SizedBox(height: 16),
+            pw.Container(
+              padding: const pw.EdgeInsets.all(16),
+              decoration: pw.BoxDecoration(
+                border: pw.Border.all(color: PdfColors.grey300),
+                borderRadius: pw.BorderRadius.circular(8),
+              ),
+              child: pw.Column(
+                crossAxisAlignment: pw.CrossAxisAlignment.start,
+                children: [
+                  pw.Text(
+                    'Summary',
+                    style: pw.TextStyle(fontSize: 16, fontWeight: pw.FontWeight.bold),
+                  ),
+                  pw.SizedBox(height: 8),
+                  pw.Text('Employees Included: ${includeEmployees ? employees.length : 0}'),
+                  pw.Text('Departments Included: ${includeDepartments ? departments.length : 0}'),
+                  pw.Text('Payslips Included: ${includePayroll ? payslips.length : 0}'),
+                  if (includePayroll && payslips.isNotEmpty)
+                    pw.Text('Total Net Salary: ${NumberFormat.simpleCurrency().format(totalNetSalary)}'),
+                  if (payPeriodStart != null && payPeriodEnd != null)
+                    pw.Text('Date Range: $payPeriodStart - $payPeriodEnd'),
+                ],
+              ),
+            ),
+            pw.SizedBox(height: 20),
+          ];
+
+          if (includeEmployees) {
+            widgets.addAll(_buildEmployeeSection(employees));
+          }
+
+            if (includeDepartments) {
+            widgets.addAll(_buildDepartmentSection(departments));
+          }
+
+          if (includePayroll) {
+            widgets.addAll(_buildPayrollSection(payslips, dateFormatter));
+          }
+
+          if (widgets.length == 3) {
+            widgets.add(
+              pw.Text('No data selected for the custom report.', style: pw.TextStyle(color: PdfColors.grey600)),
+            );
+          }
+
+          return widgets;
+        },
+      ),
+    );
+
+    return pdf.save();
+  }
+
+  List<pw.Widget> _buildEmployeeSection(List<Employee> employees) {
+    if (employees.isEmpty) {
+      return [
+        pw.Text('Employee Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Text('No employee data available.', style: pw.TextStyle(color: PdfColors.grey600)),
+        pw.SizedBox(height: 16),
+      ];
+    }
+
+    return [
+      pw.Text('Employee Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 10),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey300),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(2),
+          1: const pw.FlexColumnWidth(2),
+          2: const pw.FlexColumnWidth(2),
+          3: const pw.FlexColumnWidth(1.5),
+          4: const pw.FlexColumnWidth(1),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              _buildTableCell('Name', isHeader: true),
+              _buildTableCell('Email', isHeader: true),
+              _buildTableCell('Department', isHeader: true),
+              _buildTableCell('Position', isHeader: true),
+              _buildTableCell('Status', isHeader: true),
+            ],
+          ),
+          ...employees.map(
+            (employee) => pw.TableRow(
+              children: [
+                _buildTableCell(employee.name),
+                _buildTableCell(employee.email),
+                _buildTableCell(employee.department),
+                _buildTableCell(employee.position),
+                _buildTableCell(employee.status),
+              ],
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 20),
+    ];
+  }
+
+  List<pw.Widget> _buildDepartmentSection(List<Department> departments) {
+    if (departments.isEmpty) {
+      return [
+        pw.Text('Department Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Text('No department data available.', style: pw.TextStyle(color: PdfColors.grey600)),
+        pw.SizedBox(height: 16),
+      ];
+    }
+
+    return [
+      pw.Text('Department Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 10),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey300),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(2),
+          1: const pw.FlexColumnWidth(3),
+          2: const pw.FlexColumnWidth(2),
+          3: const pw.FlexColumnWidth(1),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              _buildTableCell('Department', isHeader: true),
+              _buildTableCell('Description', isHeader: true),
+              _buildTableCell('Manager', isHeader: true),
+              _buildTableCell('Employees', isHeader: true),
+            ],
+          ),
+          ...departments.map(
+            (dept) => pw.TableRow(
+              children: [
+                _buildTableCell(dept.name),
+                _buildTableCell(dept.description),
+                _buildTableCell(dept.managerName ?? 'N/A'),
+                _buildTableCell('${dept.employeeCount}'),
+              ],
+            ),
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 20),
+    ];
+  }
+
+  List<pw.Widget> _buildPayrollSection(
+    List<Payslip> payslips,
+    DateFormat dateFormatter,
+  ) {
+    if (payslips.isEmpty) {
+      return [
+        pw.Text('Payroll Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+        pw.SizedBox(height: 8),
+        pw.Text('No payroll data available.', style: pw.TextStyle(color: PdfColors.grey600)),
+        pw.SizedBox(height: 16),
+      ];
+    }
+
+    final totalNet = payslips.fold<double>(0, (sum, p) => sum + p.netSalary);
+    final averageNet = totalNet / payslips.length;
+
+    return [
+      pw.Text('Payroll Summary', style: pw.TextStyle(fontSize: 18, fontWeight: pw.FontWeight.bold)),
+      pw.SizedBox(height: 8),
+      pw.Text('Total Net Salary: ${NumberFormat.simpleCurrency().format(totalNet)}'),
+      pw.Text('Average Net Salary: ${NumberFormat.simpleCurrency().format(averageNet)}'),
+      pw.SizedBox(height: 10),
+      pw.Table(
+        border: pw.TableBorder.all(color: PdfColors.grey300),
+        columnWidths: {
+          0: const pw.FlexColumnWidth(2.5),
+          1: const pw.FlexColumnWidth(1.5),
+          2: const pw.FlexColumnWidth(1.5),
+          3: const pw.FlexColumnWidth(1.5),
+        },
+        children: [
+          pw.TableRow(
+            decoration: const pw.BoxDecoration(color: PdfColors.grey200),
+            children: [
+              _buildTableCell('Employee', isHeader: true),
+              _buildTableCell('Period', isHeader: true),
+              _buildTableCell('Net Salary', isHeader: true),
+              _buildTableCell('Status', isHeader: true),
+            ],
+          ),
+          ...payslips.map(
+            (payslip) {
+              final period = payslip.payPeriodStart != null
+                  ? '${dateFormatter.format(payslip.payPeriodStart!)} - ${dateFormatter.format(payslip.payPeriodEnd ?? payslip.payPeriodStart!)}'
+                  : '${payslip.month} ${payslip.year}';
+              return pw.TableRow(
+                children: [
+                  _buildTableCell(payslip.employeeName),
+                  _buildTableCell(period),
+                  _buildTableCell(NumberFormat.simpleCurrency().format(payslip.netSalary)),
+                  _buildTableCell(payslip.status),
+                ],
+              );
+            },
+          ),
+        ],
+      ),
+      pw.SizedBox(height: 20),
+    ];
   }
 
   // Helper method to build table cells
