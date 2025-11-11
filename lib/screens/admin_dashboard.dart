@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
+import '../models/user.dart';
 import '../services/api_employee_service.dart';
 import '../services/department_service.dart';
 import '../services/leave_service.dart';
@@ -32,6 +33,9 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   int _pendingLeaves = 0;
   int _activeProjects = 0; // This might need a task service if implemented
   bool _isLoading = true;
+  int _currentIndex = 0;
+  String _quickSearchQuery = '';
+  final TextEditingController _searchController = TextEditingController();
 
   @override
   void initState() {
@@ -51,6 +55,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   void dispose() {
     routeObserver.unsubscribe(this);
     WidgetsBinding.instance.removeObserver(this);
+    _searchController.dispose();
     super.dispose();
   }
 
@@ -160,262 +165,400 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
     final user = authProvider.currentUser;
+    final titles = ['Home', 'Statistics', 'Profile'];
+    final actions = <Widget>[
+      if (_currentIndex == 1)
+        IconButton(
+          icon: const Icon(Icons.refresh),
+          onPressed: _loadDashboardData,
+        ),
+    ];
 
     return Scaffold(
       appBar: AppBar(
-        title: const Text('Admin Dashboard'),
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout),
-            onPressed: () async {
-              await authProvider.logout();
-            },
-          ),
+        title: Text(titles[_currentIndex]),
+        actions: actions,
+      ),
+      body: IndexedStack(
+        index: _currentIndex,
+        children: [
+          _buildHomeTab(context, user),
+          _buildStatisticsTab(context),
+          _buildProfileTab(context, authProvider, user),
         ],
       ),
-      body: SingleChildScrollView(
-        padding: const EdgeInsets.all(16.0),
+      bottomNavigationBar: BottomNavigationBar(
+        currentIndex: _currentIndex,
+        onTap: (index) => setState(() => _currentIndex = index),
+        items: const [
+          BottomNavigationBarItem(icon: Icon(Icons.home_rounded), label: 'Home'),
+          BottomNavigationBarItem(icon: Icon(Icons.bar_chart_rounded), label: 'Statistics'),
+          BottomNavigationBarItem(icon: Icon(Icons.person_rounded), label: 'Profile'),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeTab(BuildContext context, User? user) {
+    final actions = _buildQuickActions(context);
+    final filteredActions = actions
+        .where(
+          (action) => action.title.toLowerCase().contains(_quickSearchQuery.toLowerCase()),
+        )
+        .toList();
+
+    return RefreshIndicator(
+      onRefresh: _loadDashboardData,
+      child: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // Welcome Card
-            Card(
-              elevation: 2,
-              child: Padding(
-                padding: const EdgeInsets.all(16.0),
-                child: Row(
+            TextField(
+              controller: _searchController,
+              decoration: InputDecoration(
+                hintText: 'Search quick actions...',
+                prefixIcon: const Icon(Icons.search),
+                suffixIcon: _quickSearchQuery.isNotEmpty
+                    ? IconButton(
+                        icon: const Icon(Icons.clear),
+                        onPressed: () {
+                          setState(() {
+                            _quickSearchQuery = '';
+                            _searchController.clear();
+                          });
+                        },
+                      )
+                    : null,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+              ),
+              onChanged: (value) => setState(() => _quickSearchQuery = value),
+            ),
+            const SizedBox(height: 16),
+            GridView.builder(
+              itemCount: filteredActions.length,
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 2,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 12,
+                childAspectRatio: 1.2,
+              ),
+              itemBuilder: (context, index) {
+                final action = filteredActions[index];
+                return _buildQuickActionCard(action);
+              },
+            ),
+            if (filteredActions.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(top: 24),
+                child: Column(
                   children: [
-                    CircleAvatar(
-                      radius: 30,
-                      backgroundColor: Theme.of(context).primaryColor,
-                      child: Text(
-                        user?.name.substring(0, 1).toUpperCase() ?? 'A',
-                        style: const TextStyle(
-                          fontSize: 24,
-                          color: Colors.white,
-                          fontWeight: FontWeight.bold,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Welcome back,',
-                            style: Theme.of(context).textTheme.bodyMedium,
-                          ),
-                          Text(
-                            user?.name ?? 'Admin',
-                            style: Theme.of(context).textTheme.headlineSmall
-                                ?.copyWith(fontWeight: FontWeight.bold),
-                          ),
-                          Text(
-                            user?.email ?? '',
-                            style: Theme.of(context).textTheme.bodySmall
-                                ?.copyWith(color: Colors.grey[600]),
-                          ),
-                        ],
-                      ),
-                    ),
+                    Icon(Icons.search_off, size: 48, color: Colors.grey[400]),
+                    const SizedBox(height: 8),
+                    Text('No quick actions found', style: TextStyle(color: Colors.grey[600])),
                   ],
                 ),
               ),
-            ),
-            const SizedBox(height: 24),
-
-            // Statistics Cards
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Text(
-                  'Overview',
-                  style: Theme.of(
-                    context,
-                  ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-                ),
-                if (_isLoading)
-                  const SizedBox(
-                    width: 20,
-                    height: 20,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                else
-                  IconButton(
-                    icon: const Icon(Icons.refresh),
-                    onPressed: _loadDashboardData,
-                    tooltip: 'Refresh',
-                  ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Total Employees',
-                    _isLoading ? '...' : _totalEmployees.toString(),
-                    Icons.people,
-                    Colors.blue,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Departments',
-                    _isLoading ? '...' : _totalDepartments.toString(),
-                    Icons.business,
-                    Colors.green,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Pending Leaves',
-                    _isLoading ? '...' : _pendingLeaves.toString(),
-                    Icons.pending_actions,
-                    Colors.orange,
-                  ),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: _buildStatCard(
-                    context,
-                    'Active Projects',
-                    _isLoading ? '...' : _activeProjects.toString(),
-                    Icons.work,
-                    Colors.purple,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
-
-            // Quick Actions
-            Text(
-              'Quick Actions',
-              style: Theme.of(
-                context,
-              ).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
-            ),
-            const SizedBox(height: 16),
-            _buildActionButton(
-              context,
-              'Manage Employees',
-              Icons.person_add,
-              () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const EmployeeManagementScreen(),
-                  ),
-                );
-                // Refresh dashboard data when returning from employee management
-                _loadDashboardData();
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'Approve Leave Requests',
-              Icons.check_circle_outline,
-              () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const LeaveManagementScreen(),
-                  ),
-                );
-                // Refresh dashboard data when returning from leave management
-                _loadDashboardData();
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildActionButton(context, 'View Reports', Icons.analytics, () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const ReportsAnalyticsScreen(),
-                ),
-              );
-            }),
-            const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'Manage Departments',
-              Icons.corporate_fare,
-              () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const DepartmentManagementScreen(),
-                  ),
-                );
-                // Refresh dashboard data when returning from department management
-                _loadDashboardData();
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'Manage Payslips',
-              Icons.receipt_long,
-              () async {
-                await Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PayslipManagementScreen(),
-                  ),
-                );
-                _loadDashboardData();
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'Generate PDFs',
-              Icons.picture_as_pdf,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const PdfGenerationScreen(),
-                  ),
-                );
-              },
-            ),
-            const SizedBox(height: 12),
-            _buildActionButton(context, 'Email Notifications', Icons.email, () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const EmailNotificationsScreen(),
-                ),
-              );
-            }),
-            const SizedBox(height: 12),
-            _buildActionButton(
-              context,
-              'Advanced Reports',
-              Icons.analytics_outlined,
-              () {
-                Navigator.push(
-                  context,
-                  MaterialPageRoute(
-                    builder: (context) => const AdvancedReportingScreen(),
-                  ),
-                );
-              },
-            ),
           ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStatisticsTab(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(16.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                'Overview',
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+              ),
+              if (_isLoading)
+                const SizedBox(
+                  width: 20,
+                  height: 20,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              else
+                IconButton(
+                  icon: const Icon(Icons.refresh),
+                  onPressed: _loadDashboardData,
+                  tooltip: 'Refresh',
+                ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  context,
+                  'Total Employees',
+                  _isLoading ? '...' : _totalEmployees.toString(),
+                  Icons.people,
+                  Colors.blue,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatCard(
+                  context,
+                  'Departments',
+                  _isLoading ? '...' : _totalDepartments.toString(),
+                  Icons.business,
+                  Colors.green,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+          Row(
+            children: [
+              Expanded(
+                child: _buildStatCard(
+                  context,
+                  'Pending Leaves',
+                  _isLoading ? '...' : _pendingLeaves.toString(),
+                  Icons.pending_actions,
+                  Colors.orange,
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: _buildStatCard(
+                  context,
+                  'Active Projects',
+                  _isLoading ? '...' : _activeProjects.toString(),
+                  Icons.work,
+                  Colors.purple,
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildProfileTab(BuildContext context, AuthProvider authProvider, User? user) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Card(
+            elevation: 2,
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        radius: 32,
+                        backgroundColor: Theme.of(context).primaryColor,
+                        child: Text(
+                          user?.name.substring(0, 1).toUpperCase() ?? 'A',
+                          style: const TextStyle(fontSize: 26, color: Colors.white, fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              user?.name ?? 'Admin',
+                              style: Theme.of(context).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.bold),
+                            ),
+                            const SizedBox(height: 4),
+                            Text(user?.email ?? '', style: TextStyle(color: Colors.grey[600])),
+                            const SizedBox(height: 4),
+                            Chip(
+                              label: Text((user?.role.name ?? 'admin').toUpperCase()),
+                              backgroundColor: Theme.of(context).primaryColor.withOpacity(0.1),
+                            ),
+                          ],
+                        ),
+                      )
+                    ],
+                  ),
+                  const SizedBox(height: 24),
+                  ListTile(
+                    leading: const Icon(Icons.lock_outline),
+                    title: const Text('Change Password'),
+                    subtitle: const Text('Update your account security'),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Change password coming soon')),);
+                    },
+                  ),
+                  ListTile(
+                    leading: const Icon(Icons.settings_outlined),
+                    title: const Text('Account Settings'),
+                    trailing: const Icon(Icons.arrow_forward_ios, size: 16),
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('Account settings coming soon')),);
+                    },
+                  ),
+                  const Divider(),
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () async {
+                        await authProvider.logout();
+                      },
+                      icon: const Icon(Icons.logout_rounded),
+                      label: const Text('Logout'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.redAccent,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 14),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  List<_QuickAction> _buildQuickActions(BuildContext context) {
+    return [
+      _QuickAction(
+        title: 'Manage Employees',
+        icon: Icons.person_add,
+        color: Colors.blue,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const EmployeeManagementScreen()),
+          );
+          _loadDashboardData();
+        },
+      ),
+      _QuickAction(
+        title: 'Approve Leave Requests',
+        icon: Icons.check_circle_outline,
+        color: Colors.orange,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const LeaveManagementScreen()),
+          );
+          _loadDashboardData();
+        },
+      ),
+      _QuickAction(
+        title: 'View Reports',
+        icon: Icons.analytics,
+        color: Colors.purple,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const ReportsAnalyticsScreen()),
+          );
+        },
+      ),
+      _QuickAction(
+        title: 'Manage Departments',
+        icon: Icons.corporate_fare,
+        color: Colors.green,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const DepartmentManagementScreen()),
+          );
+          _loadDashboardData();
+        },
+      ),
+      _QuickAction(
+        title: 'Manage Payslips',
+        icon: Icons.receipt_long,
+        color: Colors.indigo,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const PayslipManagementScreen()),
+          );
+          _loadDashboardData();
+        },
+      ),
+      _QuickAction(
+        title: 'Generate PDFs',
+        icon: Icons.picture_as_pdf,
+        color: Colors.redAccent,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const PdfGenerationScreen()),
+          );
+        },
+      ),
+      _QuickAction(
+        title: 'Email Notifications',
+        icon: Icons.email_outlined,
+        color: Colors.teal,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const EmailNotificationsScreen()),
+          );
+        },
+      ),
+      _QuickAction(
+        title: 'Advanced Reports',
+        icon: Icons.dashboard_customize,
+        color: Colors.deepOrange,
+        onTap: () {
+          Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const AdvancedReportingScreen()),
+          );
+        },
+      ),
+    ];
+  }
+
+  Widget _buildQuickActionCard(_QuickAction action) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: action.onTap,
+      child: Ink(
+        decoration: BoxDecoration(
+          color: action.color.withOpacity(0.08),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              CircleAvatar(
+                backgroundColor: action.color.withOpacity(0.15),
+                child: Icon(action.icon, color: action.color),
+              ),
+              Text(
+                action.title,
+                style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 16),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -456,21 +599,18 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
       ),
     );
   }
+}
 
-  Widget _buildActionButton(
-    BuildContext context,
-    String title,
-    IconData icon,
-    VoidCallback onTap,
-  ) {
-    return Card(
-      elevation: 1,
-      child: ListTile(
-        leading: Icon(icon, color: Theme.of(context).primaryColor),
-        title: Text(title),
-        trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-        onTap: onTap,
-      ),
-    );
-  }
+class _QuickAction {
+  const _QuickAction({
+    required this.title,
+    required this.icon,
+    required this.color,
+    required this.onTap,
+  });
+
+  final String title;
+  final IconData icon;
+  final Color color;
+  final VoidCallback onTap;
 }
