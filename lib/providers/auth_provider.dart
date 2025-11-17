@@ -67,6 +67,24 @@ class AuthProvider with ChangeNotifier {
     notifyListeners();
   }
 
+  Future<bool> changePassword(String currentPassword, String newPassword, String confirmPassword) async {
+    try {
+      final success = await _authService.changePassword(currentPassword, newPassword, confirmPassword);
+      if (!success) {
+        _errorMessage = 'Failed to change password. Please verify your details and try again.';
+        notifyListeners();
+      } else {
+        _errorMessage = null;
+        notifyListeners();
+      }
+      return success;
+    } catch (e) {
+      _errorMessage = 'Unable to change password at the moment.';
+      notifyListeners();
+      return false;
+    }
+  }
+
   Future<User?> registerOrganization({
     required String organizationName,
     required String organizationEmail,

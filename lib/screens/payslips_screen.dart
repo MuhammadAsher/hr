@@ -1,8 +1,15 @@
+import 'dart:io';
+
 import 'package:flutter/material.dart';
+import 'package:path_provider/path_provider.dart';
+import 'package:printing/printing.dart';
 import 'package:provider/provider.dart';
+import '../models/employee.dart';
 import '../models/payslip.dart';
-import '../services/payslip_service.dart';
 import '../providers/auth_provider.dart';
+import '../services/api_employee_service.dart';
+import '../services/payslip_service.dart';
+import '../services/pdf_service.dart';
 
 class PayslipsScreen extends StatefulWidget {
   const PayslipsScreen({super.key});
@@ -13,8 +20,11 @@ class PayslipsScreen extends StatefulWidget {
 
 class _PayslipsScreenState extends State<PayslipsScreen> {
   final PayslipService _payslipService = PayslipService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
+  final PdfService _pdfService = PdfService();
   List<Payslip> _payslips = [];
   bool _isLoading = true;
+  String? _downloadingPayslipId;
 
   @override
   void initState() {
@@ -145,15 +155,21 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
               
               SizedBox(
                 width: double.infinity,
-                child: ElevatedButton.icon(
-                  onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('Download feature - Coming Soon')),
-                    );
-                  },
-                  icon: const Icon(Icons.download),
-                  label: const Text('Download PDF'),
-                  style: ElevatedButton.styleFrom(
+                child: FilledButton.icon(
+                  onPressed: _downloadingPayslipId == payslip.id
+                      ? null
+                      : () => _downloadPayslip(payslip),
+                  icon: _downloadingPayslipId == payslip.id
+                      ? const SizedBox(
+                          width: 18,
+                          height: 18,
+                          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
+                        )
+                      : const Icon(Icons.download),
+                  label: Text(
+                    _downloadingPayslipId == payslip.id ? 'Preparing...' : 'Download PDF',
+                  ),
+                  style: FilledButton.styleFrom(
                     padding: const EdgeInsets.symmetric(vertical: 16),
                   ),
                 ),
@@ -162,6 +178,65 @@ class _PayslipsScreenState extends State<PayslipsScreen> {
           ),
         ),
       ),
+    );
+  }
+
+  Future<void> _downloadPayslip(Payslip payslip) async {
+    setState(() => _downloadingPayslipId = payslip.id);
+
+    try {
+      Employee employee;
+      try {
+        final fetched = await _employeeService.getEmployeeById(payslip.employeeId);
+        if (fetched != null) {
+          employee = fetched;
+        } else {
+          employee = _fallbackEmployee(payslip);
+        }
+      } catch (_) {
+        employee = _fallbackEmployee(payslip);
+      }
+
+      final pdfBytes = await _pdfService.generatePayslip(payslip, employee);
+      final filename = 'Payslip_${payslip.month}_${payslip.year}.pdf';
+      final directory = await getApplicationDocumentsDirectory();
+      final filePath = '${directory.path}/$filename';
+      final file = File(filePath);
+      await file.writeAsBytes(pdfBytes, flush: true);
+
+      if (!mounted) return;
+
+      await Printing.sharePdf(bytes: pdfBytes, filename: filename);
+
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Payslip saved to $filePath')),
+      );
+    } catch (e) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Failed to download payslip: $e')),
+      );
+    } finally {
+      if (mounted) {
+        setState(() => _downloadingPayslipId = null);
+      }
+    }
+  }
+
+  Employee _fallbackEmployee(Payslip payslip) {
+    final sanitizedName = payslip.employeeName.isNotEmpty
+        ? payslip.employeeName.replaceAll(' ', '.').toLowerCase()
+        : 'employee';
+    return Employee(
+      id: payslip.employeeId,
+      name: payslip.employeeName,
+      email: '$sanitizedName@example.com',
+      department: 'N/A',
+      position: 'Employee',
+      phone: 'N/A',
+      joinDate: DateTime.now(),
+      salary: payslip.basicSalary,
+      status: 'Active',
     );
   }
 

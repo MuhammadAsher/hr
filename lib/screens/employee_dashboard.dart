@@ -4,6 +4,7 @@ import '../providers/auth_provider.dart';
 import '../models/user.dart';
 import '../models/user_role.dart';
 import '../providers/theme_provider.dart';
+import '../widgets/change_password_sheet.dart';
 import '../services/leave_service.dart';
 import '../services/attendance_service.dart';
 import '../services/task_service.dart';
@@ -278,7 +279,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           const SizedBox(height: 24),
           _buildInfoSection(context, infoRows),
           const SizedBox(height: 24),
-          _buildPreferencesSection(context, themeProvider),
+          _buildPreferencesSection(context, themeProvider, authProvider),
           const SizedBox(height: 24),
           SizedBox(
             width: double.infinity,
@@ -447,7 +448,11 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
     );
   }
 
-  Widget _buildPreferencesSection(BuildContext context, ThemeProvider themeProvider) {
+  Widget _buildPreferencesSection(
+    BuildContext context,
+    ThemeProvider themeProvider,
+    AuthProvider authProvider,
+  ) {
     final colorScheme = Theme.of(context).colorScheme;
     return Card(
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(24)),
@@ -472,11 +477,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
               title: const Text('Change Password'),
               subtitle: const Text('Update your account security settings'),
               trailing: const Icon(Icons.arrow_forward_ios, size: 16),
-              onTap: () {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('Change password coming soon')),
-                );
-              },
+              onTap: () => _openChangePasswordSheet(context, authProvider),
             ),
           ],
         ),
@@ -716,6 +717,25 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   String _formatCount(int? value) {
     if (value == null) return '--';
     return value.toString();
+  }
+
+  Future<void> _openChangePasswordSheet(BuildContext context, AuthProvider authProvider) async {
+    final result = await showModalBottomSheet<bool>(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+      ),
+      builder: (_) => ChangePasswordSheet(authProvider: authProvider),
+    );
+
+    if (!mounted) return;
+
+    if (result == true) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Password updated successfully')),
+      );
+    }
   }
 }
 
