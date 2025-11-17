@@ -995,6 +995,68 @@ router.put('/:employeeId', requireAdmin, updateEmployeeValidation, async (req, r
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+// Toggle employee status (Active/Inactive) - Admin only
+router.patch('/:employeeId/toggle-status', requireAdmin, async (req, res) => {
+  try {
+    const { employeeId } = req.params;
+    const organizationId = req.user.organization_id;
+
+    const employee = await Employee.findOne({
+      where: {
+        id: employeeId,
+        organization_id: organizationId,
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'is_active'],
+        },
+      ],
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Employee not found',
+        code: 404,
+      });
+    }
+
+    // Toggle status between active and inactive
+    const newStatus = employee.status === 'active' ? 'inactive' : 'active';
+    await employee.update({ status: newStatus });
+
+    // Also update the associated user account status
+    if (employee.user) {
+      await employee.user.update({ is_active: newStatus === 'active' });
+    }
+
+    // Reload employee with associations
+    const updatedEmployee = await Employee.findByPk(employee.id, {
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'role', 'is_active'],
+        },
+      ],
+    });
+
+    res.status(200).json({
+      data: updatedEmployee,
+      message: `Employee ${newStatus === 'active' ? 'activated' : 'deactivated'} successfully`,
+    });
+  } catch (error) {
+    console.error('Toggle employee status error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to toggle employee status',
+      code: 500,
+    });
+  }
+});
+
 // Delete employee (Admin only)
 router.delete('/:employeeId', requireAdmin, async (req, res) => {
   try {

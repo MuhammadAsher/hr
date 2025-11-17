@@ -100,6 +100,67 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     }
   }
 
+  Future<void> _toggleEmployeeStatus(Employee employee) async {
+    final isActive = employee.status.toLowerCase() == 'active';
+    final action = isActive ? 'deactivate' : 'activate';
+    
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text('Confirm ${action == 'activate' ? 'Activation' : 'Deactivation'}'),
+        content: Text(
+          'Are you sure you want to $action "${employee.name}"? '
+          '${isActive ? 'The employee will not be able to access the system.' : 'The employee will be able to access the system again.'}',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text(
+              action == 'activate' ? 'Activate' : 'Deactivate',
+              style: TextStyle(
+                color: isActive ? Colors.orange : Colors.green,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true) {
+      try {
+        setState(() => _isLoading = true);
+        await _apiEmployeeService.toggleEmployeeStatus(employee.id);
+        _loadEmployees();
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Employee ${action}d successfully'),
+              backgroundColor: Colors.green,
+            ),
+          );
+        }
+      } catch (e) {
+        print('❌ Failed to toggle employee status: $e');
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Failed to $action employee: ${e.toString().replaceAll('Exception: ', '')}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
+      } finally {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    }
+  }
+
   Future<void> _deleteEmployee(String id) async {
     final confirmed = await showDialog<bool>(
       context: context,
@@ -323,45 +384,67 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             ],
                           ),
                           trailing: PopupMenuButton(
-                            itemBuilder: (context) => [
-                              const PopupMenuItem(
-                                value: 'view',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.visibility, size: 20),
-                                    SizedBox(width: 8),
-                                    Text('View Details'),
-                                  ],
+                            itemBuilder: (context) {
+                              final isActive = employee.status.toLowerCase() == 'active';
+                              return [
+                                const PopupMenuItem(
+                                  value: 'view',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.visibility, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('View Details'),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'edit',
-                                child: Row(
-                                  children: [
-                                    Icon(Icons.edit, size: 20),
-                                    SizedBox(width: 8),
-                                    Text('Edit'),
-                                  ],
+                                const PopupMenuItem(
+                                  value: 'edit',
+                                  child: Row(
+                                    children: [
+                                      Icon(Icons.edit, size: 20),
+                                      SizedBox(width: 8),
+                                      Text('Edit'),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                              const PopupMenuItem(
-                                value: 'delete',
-                                child: Row(
-                                  children: [
-                                    Icon(
-                                      Icons.delete,
-                                      size: 20,
-                                      color: Colors.red,
-                                    ),
-                                    SizedBox(width: 8),
-                                    Text(
-                                      'Delete',
-                                      style: TextStyle(color: Colors.red),
-                                    ),
-                                  ],
+                                PopupMenuItem(
+                                  value: 'toggle_status',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        isActive ? Icons.block : Icons.check_circle,
+                                        size: 20,
+                                        color: isActive ? Colors.orange : Colors.green,
+                                      ),
+                                      const SizedBox(width: 8),
+                                      Text(
+                                        isActive ? 'Deactivate' : 'Activate',
+                                        style: TextStyle(
+                                          color: isActive ? Colors.orange : Colors.green,
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            ],
+                                const PopupMenuItem(
+                                  value: 'delete',
+                                  child: Row(
+                                    children: [
+                                      Icon(
+                                        Icons.delete,
+                                        size: 20,
+                                        color: Colors.red,
+                                      ),
+                                      SizedBox(width: 8),
+                                      Text(
+                                        'Delete',
+                                        style: TextStyle(color: Colors.red),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ];
+                            },
                             onSelected: (value) {
                               if (value == 'view') {
                                 _showEmployeeDetails(employee);
@@ -374,6 +457,8 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                     ),
                                   ),
                                 ).then((_) => _loadEmployees());
+                              } else if (value == 'toggle_status') {
+                                _toggleEmployeeStatus(employee);
                               } else if (value == 'delete') {
                                 _deleteEmployee(employee.id);
                               }

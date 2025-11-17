@@ -139,6 +139,21 @@ class ApiEmployeeService {
     return getAllEmployees(status: 'active');
   }
 
+  // Toggle employee status (Active/Inactive)
+  Future<Employee> toggleEmployeeStatus(String id) async {
+    try {
+      final response = await _apiClient.patch('/employees/$id/toggle-status', body: {});
+
+      if (response.isSuccess) {
+        return Employee.fromApiJson(response.data['data']);
+      } else {
+        throw Exception(response.message ?? 'Failed to toggle employee status');
+      }
+    } catch (e) {
+      throw Exception('Failed to toggle employee status: $e');
+    }
+  }
+
   // Get total employee count
   Future<int> getTotalEmployeeCount() async {
     try {
