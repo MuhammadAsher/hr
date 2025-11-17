@@ -667,6 +667,18 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   List<_QuickAction> _buildQuickActions(BuildContext context) {
     return [
       _QuickAction(
+        title: 'Manage Departments',
+        icon: Icons.corporate_fare,
+        color: Colors.green,
+        onTap: () async {
+          await Navigator.push(
+            context,
+            MaterialPageRoute(builder: (context) => const DepartmentManagementScreen()),
+          );
+          _loadDashboardData();
+        },
+      ),
+      _QuickAction(
         title: 'Manage Employees',
         icon: Icons.person_add,
         color: Colors.blue,
@@ -699,18 +711,6 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
             context,
             MaterialPageRoute(builder: (context) => const ReportsAnalyticsScreen()),
           );
-        },
-      ),
-      _QuickAction(
-        title: 'Manage Departments',
-        icon: Icons.corporate_fare,
-        color: Colors.green,
-        onTap: () async {
-          await Navigator.push(
-            context,
-            MaterialPageRoute(builder: (context) => const DepartmentManagementScreen()),
-          );
-          _loadDashboardData();
         },
       ),
       _QuickAction(

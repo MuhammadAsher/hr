@@ -359,7 +359,7 @@ function renderOrganizationsTable() {
                     ${org.is_active ? 'Active' : 'Inactive'}
                 </span>
             </td>
-            <td>${formatDate(org.created_at)}</td>
+            <td>${formatDate(org.registered_date || org.registeredDate || org.created_at || org.createdAt)}</td>
             <td>
                 <div class="action-buttons">
                     <button class="action-btn view" title="View Details" type="button">
@@ -476,7 +476,7 @@ async function viewOrganization(orgId) {
                 </div>
                 <div class="detail-row">
                     <div class="detail-label">Created:</div>
-                    <div class="detail-value">${formatDate(org.created_at)}</div>
+                    <div class="detail-value">${formatDate(org.registered_date || org.registeredDate || org.created_at || org.createdAt)}</div>
                 </div>
                 ${org.website ? `
                 <div class="detail-row">

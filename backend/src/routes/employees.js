@@ -419,6 +419,7 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
 
     try {
       // Double-check email uniqueness within transaction (to handle race conditions)
+      // Check both User and Employee tables
       const existingUserInTx = await User.findOne({
         where: {
           email,
@@ -453,16 +454,49 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
         });
       }
 
+      // Also check if employee_id already exists (shouldn't happen, but safety check)
+      const existingEmployeeId = await Employee.findOne({
+        where: {
+          employee_id: employeeId,
+          organization_id: organizationId,
+        },
+        transaction,
+      });
+
+      if (existingEmployeeId) {
+        await transaction.rollback();
+        // Regenerate employee ID - count might be off due to failed transactions
+        const newEmployeeId = await Employee.generateEmployeeId(organizationId);
+        return res.status(409).json({
+          error: 'Conflict',
+          message: `An employee with ID "${employeeId}" already exists. Please try again with a new employee ID.`,
+          code: 409,
+        });
+      }
+
       // Create user account for the employee
-      const user = await User.create({
-        organization_id: organizationId,
-        email,
-        password_hash: defaultPassword, // Will be hashed by beforeCreate hook
-        name,
-        role: 'employee',
-        email_verified: false,
-        is_active: true,
-      }, { transaction });
+      console.log('🔍 Creating user with:', { email, organization_id: organizationId, name });
+      let user;
+      try {
+        user = await User.create({
+          organization_id: organizationId,
+          email,
+          password_hash: defaultPassword, // Will be hashed by beforeCreate hook
+          name,
+          role: 'employee',
+          email_verified: false,
+          is_active: true,
+        }, { transaction });
+        console.log('✅ User created successfully:', user.id);
+      } catch (userCreateError) {
+        console.error('❌ User creation failed:', {
+          name: userCreateError.name,
+          message: userCreateError.message,
+          parent: userCreateError.parent?.message,
+          fields: userCreateError.fields,
+        });
+        throw userCreateError;
+      }
 
       // Create employee and link to user account
       const employee = await Employee.create({
@@ -539,30 +573,78 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
         fields: error.fields,
         parent: error.parent?.message,
         errors: error.errors,
+        constraint: error.parent?.constraint,
+        table: error.parent?.table,
       });
       
       // Check which unique constraint was violated
-      const constraintName = error.parent?.message || '';
+      const constraintName = error.parent?.constraint || error.parent?.message || '';
+      const errorMessage = error.parent?.message || '';
       let message = 'A record with this information already exists';
       
+      // Check constraint name first (most reliable)
       if (constraintName.includes('unique_employee_email_per_organization') || 
-          error.fields?.includes('email')) {
+          errorMessage.includes('unique_employee_email_per_organization')) {
         message = `An employee with email "${req.body.email}" already exists in this organization`;
       } else if (constraintName.includes('unique_employee_id_per_organization') || 
+                 errorMessage.includes('unique_employee_id_per_organization') ||
                  error.fields?.includes('employee_id')) {
         message = `An employee with ID "${req.body.employee_id || 'generated'}" already exists in this organization`;
       } else if (constraintName.includes('unique_email_per_organization') || 
-                 error.fields?.includes('email')) {
+                 errorMessage.includes('unique_email_per_organization') ||
+                 (error.fields?.includes('email') && !errorMessage.includes('employee'))) {
         message = `A user with email "${req.body.email}" already exists in this organization`;
       } else if (error.errors && error.errors.length > 0) {
         const firstError = error.errors[0];
-        message = `${firstError.path || 'Field'} "${firstError.value || 'value'}" already exists`;
+        const fieldName = firstError.path || 'Field';
+        const fieldValue = firstError.value || 'value';
+        
+        // Provide more specific messages based on field
+        if (fieldName === 'email') {
+          message = `An employee or user with email "${fieldValue}" already exists in this organization`;
+        } else if (fieldName === 'employee_id') {
+          message = `An employee with ID "${fieldValue}" already exists in this organization`;
+        } else {
+          message = `${fieldName} "${fieldValue}" already exists`;
+        }
+      } else if (errorMessage) {
+        // Fallback: try to extract useful info from error message
+        // SQLite sometimes reports errors in confusing ways
+        if (errorMessage.includes('email') || errorMessage.toLowerCase().includes('email')) {
+          message = `An employee or user with email "${req.body.email}" already exists in this organization`;
+        } else if (errorMessage.includes('employee_id') || errorMessage.toLowerCase().includes('employee_id')) {
+          message = `An employee with ID "${req.body.employee_id || 'generated'}" already exists in this organization`;
+        } else if (errorMessage.includes('organization_id') && errorMessage.includes('already exists')) {
+          // This should not happen after migration, but handle it just in case
+          // SQLite sometimes reports composite unique constraint violations as organization_id errors
+          // This is likely an email+organization_id constraint violation
+          if (error.fields?.includes('organization_id') && !error.fields?.includes('email')) {
+            // This is a database schema issue - should not happen
+            message = `Database error: Multiple employees cannot be created for the same organization. Please contact support.`;
+            console.error('⚠️ CRITICAL: organization_id UNIQUE constraint still exists in database!');
+          } else {
+            message = `An employee or user with email "${req.body.email}" already exists in this organization`;
+          }
+        } else {
+          // Log the full error for debugging
+          console.error('Unhandled unique constraint error format:', errorMessage);
+          message = `A record with this information already exists. Please check if the email "${req.body.email}" is already in use.`;
+        }
       }
+      
+      // Get organizationId from request user (might not be in scope if error occurred early)
+      const orgId = req.user?.organization_id || 'unknown';
       
       return res.status(409).json({
         error: 'Conflict',
         message: message,
         code: 409,
+        details: {
+          email: req.body.email,
+          organizationId: orgId,
+          constraint: constraintName,
+          errorMessage: errorMessage,
+        },
       });
     }
     

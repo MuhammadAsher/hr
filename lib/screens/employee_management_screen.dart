@@ -150,13 +150,44 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const AddEditEmployeeScreen(),
-                ),
-              ).then((_) => _loadEmployees());
+            onPressed: () async {
+              // Check if departments exist before allowing employee creation
+              final departmentService = DepartmentService();
+              try {
+                final departments = await departmentService.getAllDepartments();
+                if (departments.isEmpty) {
+                  if (mounted) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      const SnackBar(
+                        content: Text('Please create a department first before adding employees'),
+                        backgroundColor: Colors.orange,
+                        duration: Duration(seconds: 3),
+                      ),
+                    );
+                  }
+                  return;
+                }
+              } catch (e) {
+                print('❌ Error checking departments: $e');
+                if (mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Error checking departments: ${e.toString()}'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+                return;
+              }
+              
+              if (mounted) {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const AddEditEmployeeScreen(),
+                  ),
+                ).then((_) => _loadEmployees());
+              }
             },
           ),
         ],
