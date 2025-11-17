@@ -167,14 +167,35 @@ class ApiClient {
       }
     } catch (e) {
       print('❌ JSON Parse Error: $e');
+      print('📄 Response body: ${response.body}');
+      
+      // Handle specific status codes that might return plain text
+      if (statusCode == 429) {
+        // Rate limit error - extract message from plain text if JSON parse failed
+        final message = response.body.isNotEmpty 
+            ? response.body 
+            : 'Too many requests. Please try again later.';
+        return ApiResponse.error(
+          statusCode: 429,
+          message: message,
+          error: 'Rate Limit Exceeded',
+        );
+      }
+      
       // If parsing fails but status is success, return success with raw body
       if (statusCode >= 200 && statusCode < 300) {
         print('⚠️ Warning: Success status but JSON parse failed, returning raw response');
         return ApiResponse.success({'raw': response.body});
       }
+      
+      // For other errors, try to extract message from plain text
+      final errorMessage = response.body.isNotEmpty 
+          ? response.body 
+          : 'Failed to parse response';
+      
       return ApiResponse.error(
         statusCode: statusCode,
-        message: 'Failed to parse response',
+        message: errorMessage,
         error: 'Parse Error',
       );
     }

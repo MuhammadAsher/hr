@@ -36,6 +36,8 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   int _pendingLeaves = 0;
   int _activeEmployees = 0;
   bool _isLoading = true;
+  bool _isLoadingData = false; // Prevent concurrent requests
+  DateTime? _lastLoadTime; // Track last load time
   int _currentIndex = 0;
   String _quickSearchQuery = '';
   final TextEditingController _searchController = TextEditingController();
@@ -68,25 +70,43 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
   @override
   void didChangeAppLifecycleState(AppLifecycleState state) {
     if (state == AppLifecycleState.resumed) {
-      // Refresh data when app comes back to foreground
-      _loadDashboardData();
+      // Refresh data when app comes back to foreground (with debounce)
+      _loadDashboardData(force: false);
     }
   }
 
   // Called when the current route has been pushed.
   @override
   void didPush() {
-    _loadDashboardData();
+    // Only load if not already loaded recently
+    _loadDashboardData(force: false);
   }
 
   // Called when the top route has been popped off, and this route shows up.
   @override
   void didPopNext() {
-    // Refresh data when returning to this screen
-    _loadDashboardData();
+    // Refresh data when returning to this screen (with debounce)
+    _loadDashboardData(force: false);
   }
 
-  Future<void> _loadDashboardData() async {
+  Future<void> _loadDashboardData({bool force = false}) async {
+    // Prevent concurrent requests
+    if (_isLoadingData && !force) {
+      print('⏸️ Dashboard data already loading, skipping...');
+      return;
+    }
+
+    // Debounce: Don't load if loaded within last 2 seconds (unless forced)
+    if (!force && _lastLoadTime != null) {
+      final timeSinceLastLoad = DateTime.now().difference(_lastLoadTime!);
+      if (timeSinceLastLoad.inSeconds < 2) {
+        print('⏸️ Dashboard data loaded recently (${timeSinceLastLoad.inSeconds}s ago), skipping...');
+        return;
+      }
+    }
+
+    _isLoadingData = true;
+    _lastLoadTime = DateTime.now();
     setState(() => _isLoading = true);
 
     try {
@@ -104,10 +124,14 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
         _pendingLeaves = results[2] as int;
         _activeEmployees = results[3] as int;
         _isLoading = false;
+        _isLoadingData = false;
       });
     } catch (e) {
       print('❌ Error loading dashboard data: $e');
-      setState(() => _isLoading = false);
+      setState(() {
+        _isLoading = false;
+        _isLoadingData = false;
+      });
       if (mounted) {
         ErrorService.showErrorSnackbar(
           message: 'Failed to load dashboard data',
@@ -180,7 +204,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
       if (_currentIndex == 1)
         IconButton(
           icon: const Icon(Icons.refresh),
-          onPressed: _loadDashboardData,
+          onPressed: () => _loadDashboardData(force: true),
         ),
     ];
 
@@ -202,7 +226,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
         onTap: (index) {
           setState(() => _currentIndex = index);
           if (index == 1) {
-            _loadDashboardData();
+            _loadDashboardData(force: true); // Force load when switching to Statistics tab
           }
         },
         items: const [
@@ -223,7 +247,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
         .toList();
 
     return RefreshIndicator(
-      onRefresh: _loadDashboardData,
+      onRefresh: () => _loadDashboardData(force: true),
       child: SingleChildScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         padding: const EdgeInsets.all(16),
@@ -687,7 +711,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
             context,
             MaterialPageRoute(builder: (context) => const EmployeeManagementScreen()),
           );
-          _loadDashboardData();
+          _loadDashboardData(force: true);
         },
       ),
       _QuickAction(
@@ -699,7 +723,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
             context,
             MaterialPageRoute(builder: (context) => const LeaveManagementScreen()),
           );
-          _loadDashboardData();
+          _loadDashboardData(force: true);
         },
       ),
       _QuickAction(
@@ -722,7 +746,7 @@ class _AdminDashboardState extends State<AdminDashboard> with RouteAware, Widget
             context,
             MaterialPageRoute(builder: (context) => const PayslipManagementScreen()),
           );
-          _loadDashboardData();
+          _loadDashboardData(force: true);
         },
       ),
       _QuickAction(

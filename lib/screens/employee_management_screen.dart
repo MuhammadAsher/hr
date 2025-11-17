@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../models/employee.dart';
@@ -21,8 +22,11 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   final ApiEmployeeService _apiEmployeeService = ApiEmployeeService();
   List<Employee> _employees = [];
   bool _isLoading = true;
+  bool _isLoadingEmployees = false; // Prevent concurrent requests
+  DateTime? _lastLoadTime; // Track last load time
   String? _errorMessage;
   final TextEditingController _searchController = TextEditingController();
+  Timer? _searchDebounceTimer; // Debounce timer for search
 
   @override
   void initState() {
@@ -33,10 +37,28 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _searchDebounceTimer?.cancel();
     super.dispose();
   }
 
-  Future<void> _loadEmployees() async {
+  Future<void> _loadEmployees({bool force = false}) async {
+    // Prevent concurrent requests
+    if (_isLoadingEmployees && !force) {
+      print('⏸️ Employees already loading, skipping...');
+      return;
+    }
+
+    // Debounce: Don't load if loaded within last 2 seconds (unless forced)
+    if (!force && _lastLoadTime != null) {
+      final timeSinceLastLoad = DateTime.now().difference(_lastLoadTime!);
+      if (timeSinceLastLoad.inSeconds < 2) {
+        print('⏸️ Employees loaded recently (${timeSinceLastLoad.inSeconds}s ago), skipping...');
+        return;
+      }
+    }
+
+    _isLoadingEmployees = true;
+    _lastLoadTime = DateTime.now();
     setState(() {
       _isLoading = true;
       _errorMessage = null;
@@ -46,12 +68,14 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       setState(() {
         _employees = employees;
         _isLoading = false;
+        _isLoadingEmployees = false;
         _errorMessage = null;
       });
     } catch (e) {
       print('❌ Failed to load employees: $e');
       setState(() {
         _isLoading = false;
+        _isLoadingEmployees = false;
         _errorMessage = e.toString();
       });
       
@@ -69,7 +93,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
 
   Future<void> _searchEmployees(String query) async {
     if (query.isEmpty) {
-      _loadEmployees();
+      _loadEmployees(force: true);
       return;
     }
 
@@ -134,7 +158,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
       try {
         setState(() => _isLoading = true);
         await _apiEmployeeService.toggleEmployeeStatus(employee.id);
-        _loadEmployees();
+        _loadEmployees(force: true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             SnackBar(
@@ -183,7 +207,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
     if (confirmed == true) {
       try {
         await _apiEmployeeService.deleteEmployee(id);
-        _loadEmployees();
+        _loadEmployees(force: true);
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
             const SnackBar(
@@ -247,7 +271,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                   MaterialPageRoute(
                     builder: (context) => const AddEditEmployeeScreen(),
                   ),
-                ).then((_) => _loadEmployees());
+                ).then((_) => _loadEmployees(force: true));
               }
             },
           ),
@@ -275,7 +299,15 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                       )
                     : null,
               ),
-              onChanged: _searchEmployees,
+              onChanged: (query) {
+                // Cancel previous timer
+                _searchDebounceTimer?.cancel();
+                
+                // Debounce search - wait 500ms after user stops typing
+                _searchDebounceTimer = Timer(const Duration(milliseconds: 500), () {
+                  _searchEmployees(query);
+                });
+              },
             ),
           ),
           Expanded(
@@ -314,7 +346,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                             ),
                             const SizedBox(height: 24),
                             ElevatedButton.icon(
-                              onPressed: _loadEmployees,
+                              onPressed: () => _loadEmployees(force: true),
                               icon: const Icon(Icons.refresh),
                               label: const Text('Retry'),
                             ),
@@ -456,7 +488,7 @@ class _EmployeeManagementScreenState extends State<EmployeeManagementScreen> {
                                       employee: employee,
                                     ),
                                   ),
-                                ).then((_) => _loadEmployees());
+                                ).then((_) => _loadEmployees(force: true));
                               } else if (value == 'toggle_status') {
                                 _toggleEmployeeStatus(employee);
                               } else if (value == 'delete') {

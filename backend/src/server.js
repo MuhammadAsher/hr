@@ -28,8 +28,18 @@ app.use(compression());
 // Rate limiting
 const limiter = rateLimit({
   windowMs: parseInt(process.env.RATE_LIMIT_WINDOW_MS) || 15 * 60 * 1000, // 15 minutes
-  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 100, // limit each IP to 100 requests per windowMs
-  message: 'Too many requests from this IP, please try again later.',
+  max: parseInt(process.env.RATE_LIMIT_MAX_REQUESTS) || 1000, // Increased to 1000 for development (was 100)
+  standardHeaders: true, // Return rate limit info in the `RateLimit-*` headers
+  legacyHeaders: false, // Disable the `X-RateLimit-*` headers
+  handler: (req, res) => {
+    // Return JSON response instead of plain text
+    res.status(429).json({
+      error: 'Too Many Requests',
+      message: 'Too many requests from this IP, please try again later.',
+      code: 429,
+      retryAfter: Math.ceil((limiter.windowMs / 1000) / 60), // minutes
+    });
+  },
 });
 app.use('/api/', limiter);
 
