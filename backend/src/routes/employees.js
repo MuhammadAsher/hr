@@ -712,6 +712,52 @@ router.post('/', requireAdmin, createEmployeeValidation, async (req, res) => {
  *             schema:
  *               $ref: '#/components/schemas/ErrorResponse'
  */
+// Get current employee profile (by user_id)
+router.get('/me', authenticateToken, async (req, res) => {
+  try {
+    const userId = req.user.id;
+    const organizationId = req.user.organization_id;
+
+    const employee = await Employee.findOne({
+      where: {
+        user_id: userId,
+        organization_id: organizationId,
+      },
+      include: [
+        {
+          model: User,
+          as: 'user',
+          attributes: ['id', 'email', 'last_login', 'email_verified'],
+        },
+        {
+          model: Employee,
+          as: 'manager',
+          attributes: ['id', 'name', 'position', 'email'],
+        },
+      ],
+    });
+
+    if (!employee) {
+      return res.status(404).json({
+        error: 'Not Found',
+        message: 'Employee profile not found',
+        code: 404,
+      });
+    }
+
+    res.status(200).json({
+      data: employee,
+    });
+  } catch (error) {
+    console.error('Get employee profile error:', error);
+    res.status(500).json({
+      error: 'Internal Server Error',
+      message: 'Failed to fetch employee profile',
+      code: 500,
+    });
+  }
+});
+
 // Get employee by ID
 router.get('/:employeeId', addOrganizationFilter, async (req, res) => {
   try {

@@ -3,11 +3,13 @@ import 'package:provider/provider.dart';
 import '../providers/auth_provider.dart';
 import '../models/user.dart';
 import '../models/user_role.dart';
+import '../models/employee.dart';
 import '../providers/theme_provider.dart';
 import '../widgets/change_password_sheet.dart';
 import '../services/leave_service.dart';
 import '../services/attendance_service.dart';
 import '../services/task_service.dart';
+import '../services/api_employee_service.dart';
 import 'apply_leave_screen.dart';
 import 'payslips_screen.dart';
 import 'my_attendance_screen.dart';
@@ -28,6 +30,7 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   final LeaveService _leaveService = LeaveService();
   final AttendanceService _attendanceService = AttendanceService();
   final TaskService _taskService = TaskService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
   final TextEditingController _statsSearchController = TextEditingController();
   String _statsSearchQuery = '';
 
@@ -36,6 +39,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   double? _attendanceRate;
   int? _openTasks;
   int? _completedTasks;
+  Employee? _currentEmployee;
+  bool _isEmployeeLoading = false;
 
   @override
   void initState() {
@@ -75,6 +80,8 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           setState(() => _currentIndex = value);
           if (value == 1) {
             _loadEmployeeStats();
+          } else if (value == 2) {
+            _loadEmployeeProfile();
           }
         },
         items: const [
@@ -263,6 +270,18 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
           label: 'Organization',
           value: user.organizationName!,
         ),
+      if (_currentEmployee != null)
+        _ProfileInfoRow(
+          icon: Icons.work,
+          label: 'Designation',
+          value: _currentEmployee!.position,
+        ),
+      if (_currentEmployee != null)
+        _ProfileInfoRow(
+          icon: Icons.business,
+          label: 'Department',
+          value: _currentEmployee!.department,
+        ),
       _ProfileInfoRow(
         icon: Icons.alternate_email,
         label: 'Email',
@@ -277,7 +296,10 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
         children: [
           _buildProfileHeader(context, user),
           const SizedBox(height: 24),
-          _buildInfoSection(context, infoRows),
+          if (_isEmployeeLoading)
+            const Center(child: Padding(padding: EdgeInsets.all(24), child: CircularProgressIndicator()))
+          else
+            _buildInfoSection(context, infoRows),
           const SizedBox(height: 24),
           _buildPreferencesSection(context, themeProvider, authProvider),
           const SizedBox(height: 24),
@@ -382,6 +404,13 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
                   icon: Icons.apartment,
                   label: user.organizationName!,
                   color: colorScheme.secondary,
+                ),
+              if (_currentEmployee != null)
+                _buildProfileBadge(
+                  context,
+                  icon: Icons.work,
+                  label: _currentEmployee!.position,
+                  color: colorScheme.tertiary,
                 ),
             ],
           ),
@@ -717,6 +746,30 @@ class _EmployeeDashboardState extends State<EmployeeDashboard> {
   String _formatCount(int? value) {
     if (value == null) return '--';
     return value.toString();
+  }
+
+  Future<void> _loadEmployeeProfile() async {
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final user = authProvider.currentUser;
+    if (user == null || user.role != UserRole.employee) return;
+
+    setState(() => _isEmployeeLoading = true);
+
+    try {
+      final employee = await _employeeService.getCurrentEmployeeProfile();
+      if (!mounted) return;
+      setState(() {
+        _currentEmployee = employee;
+        _isEmployeeLoading = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _currentEmployee = null;
+        _isEmployeeLoading = false;
+      });
+      // Silently fail - employee might not have a profile yet
+    }
   }
 
   Future<void> _openChangePasswordSheet(BuildContext context, AuthProvider authProvider) async {

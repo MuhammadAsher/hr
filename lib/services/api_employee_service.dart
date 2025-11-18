@@ -53,6 +53,23 @@ class ApiEmployeeService {
     }
   }
 
+  // Get current employee profile (by authenticated user)
+  Future<Employee?> getCurrentEmployeeProfile() async {
+    try {
+      final response = await _apiClient.get('/employees/me');
+
+      if (response.isSuccess) {
+        return Employee.fromApiJson(response.data['data']);
+      } else if (response.statusCode == 404) {
+        return null;
+      } else {
+        throw Exception(response.message ?? 'Failed to fetch employee profile');
+      }
+    } catch (e) {
+      throw Exception('Failed to fetch employee profile: $e');
+    }
+  }
+
   // Create new employee
   Future<Employee> createEmployee({
     required String name,
