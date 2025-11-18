@@ -57,21 +57,12 @@ router.get('/', requireSuperAdmin, async (req, res) => {
 
     const whereClause = {};
     if (search) {
-      // SQLite doesn't support iLike, so we use LIKE with lowercase conversion
-      const searchLower = search.toLowerCase();
+      // SQLite LIKE is case-insensitive by default
+      const searchPattern = `%${search}%`;
       whereClause[Op.or] = [
-        sequelize.where(
-          sequelize.fn('LOWER', sequelize.col('name')),
-          { [Op.like]: `%${searchLower}%` }
-        ),
-        sequelize.where(
-          sequelize.fn('LOWER', sequelize.col('email')),
-          { [Op.like]: `%${searchLower}%` }
-        ),
-        sequelize.where(
-          sequelize.fn('LOWER', sequelize.col('industry')),
-          { [Op.like]: `%${searchLower}%` }
-        ),
+        { name: { [Op.like]: searchPattern } },
+        { email: { [Op.like]: searchPattern } },
+        { industry: { [Op.like]: searchPattern } },
       ];
     }
 
@@ -100,10 +91,14 @@ router.get('/', requireSuperAdmin, async (req, res) => {
     });
   } catch (error) {
     console.error('Get organizations error:', error);
+    console.error('Error name:', error.name);
+    console.error('Error message:', error.message);
+    console.error('Error stack:', error.stack);
     res.status(500).json({
       error: 'Internal Server Error',
       message: 'Failed to fetch organizations',
       code: 500,
+      details: process.env.NODE_ENV === 'development' ? error.message : undefined,
     });
   }
 });
