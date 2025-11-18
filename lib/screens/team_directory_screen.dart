@@ -96,13 +96,28 @@ class _TeamDirectoryScreenState extends State<TeamDirectoryScreen> {
   }
 
   Future<void> _sendEmail(String email) async {
-    final Uri emailUri = Uri(scheme: 'mailto', path: email);
-    if (await canLaunchUrl(emailUri)) {
-      await launchUrl(emailUri);
-    } else {
+    final Uri emailUri = Uri.parse('mailto:$email');
+    try {
+      if (await canLaunchUrl(emailUri)) {
+        await launchUrl(
+          emailUri,
+          mode: LaunchMode.externalApplication,
+        );
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(
+              content: Text('No email client found. Please install an email app.'),
+            ),
+          );
+        }
+      }
+    } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Could not launch email client')),
+          SnackBar(
+            content: Text('Could not launch email client: ${e.toString()}'),
+          ),
         );
       }
     }
