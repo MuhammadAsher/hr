@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../models/employee.dart';
-import '../services/employee_service.dart';
+import '../services/api_employee_service.dart';
 import '../services/department_service.dart';
 
 class TeamDirectoryScreen extends StatefulWidget {
@@ -12,7 +12,7 @@ class TeamDirectoryScreen extends StatefulWidget {
 }
 
 class _TeamDirectoryScreenState extends State<TeamDirectoryScreen> {
-  final EmployeeService _employeeService = EmployeeService();
+  final ApiEmployeeService _employeeService = ApiEmployeeService();
   final DepartmentService _departmentService = DepartmentService();
 
   List<Employee> _employees = [];
@@ -375,10 +375,11 @@ class _EmployeeDetailsSheet extends StatelessWidget {
                 ),
               ),
 
-              // Header
+              // Header - Fixed size section
               Padding(
                 padding: const EdgeInsets.all(24.0),
                 child: Column(
+                  mainAxisSize: MainAxisSize.min,
                   children: [
                     CircleAvatar(
                       radius: 40,
@@ -398,6 +399,8 @@ class _EmployeeDetailsSheet extends StatelessWidget {
                       style: Theme.of(context).textTheme.headlineSmall
                           ?.copyWith(fontWeight: FontWeight.bold),
                       textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 4),
                     Text(
@@ -406,6 +409,8 @@ class _EmployeeDetailsSheet extends StatelessWidget {
                         color: Colors.grey[600],
                       ),
                       textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
                     ),
                     const SizedBox(height: 2),
                     Text(
@@ -414,6 +419,8 @@ class _EmployeeDetailsSheet extends StatelessWidget {
                         context,
                       ).textTheme.bodyMedium?.copyWith(color: Colors.grey[500]),
                       textAlign: TextAlign.center,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
                   ],
                 ),
@@ -455,7 +462,7 @@ class _EmployeeDetailsSheet extends StatelessWidget {
 
               const SizedBox(height: 24),
 
-              // Employee Details
+              // Employee Details - Scrollable section
               Expanded(
                 child: ListView(
                   controller: scrollController,
