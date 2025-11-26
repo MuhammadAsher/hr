@@ -31,6 +31,13 @@ class _EmailNotificationsScreenState extends State<EmailNotificationsScreen> {
   }
 
   Future<void> _testEmailConfiguration() async {
+    // First check if credentials are set
+    final hasCredentials = _emailService.isConfigured;
+    if (!hasCredentials) {
+      setState(() => _emailConfigured = false);
+      return;
+    }
+    // Then test the actual connection
     final isConfigured = await _emailService.testEmailConfiguration();
     setState(() => _emailConfigured = isConfigured);
   }
@@ -388,8 +395,15 @@ class _EmailNotificationsScreenState extends State<EmailNotificationsScreen> {
                     ),
                     const SizedBox(height: 8),
                     const Text(
-                      'To enable email notifications, configure SMTP settings in EmailService. '
-                      'Update the email credentials with your company\'s email server details.',
+                      'To enable email notifications, configure SMTP settings in EmailService.\n\n'
+                      'Quick Setup (Gmail - Recommended):\n'
+                      '1. Enable 2FA: https://myaccount.google.com/security\n'
+                      '2. Generate App Password: https://myaccount.google.com/apppasswords\n'
+                      '3. Update credentials in lib/services/email_service.dart\n\n'
+                      'Other Free Options:\n'
+                      '• SendGrid: https://sendgrid.com - 100 emails/day\n'
+                      '• SMTP2GO: https://smtp2go.com - 1,000 emails/month\n'
+                      '• Brevo: https://brevo.com - 300 emails/day',
                       style: TextStyle(fontSize: 12),
                     ),
                   ],

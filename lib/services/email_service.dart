@@ -5,26 +5,73 @@ import '../models/leave_request.dart';
 import '../models/task.dart';
 
 class EmailService {
-  // Email configuration - In production, these should be stored securely
+  // Email configuration - Gmail SMTP (Free & Reliable)
+  // 
+  // SETUP INSTRUCTIONS FOR GMAIL (RECOMMENDED):
+  // 1. Enable 2-Factor Authentication on your Gmail account
+  //    - Go to: https://myaccount.google.com/security
+  //    - Click on "2-Step Verification" and enable it
+  //
+  // 2. Generate an App Password:
+  //    - Go to: https://myaccount.google.com/apppasswords
+  //    - Select "Mail" from the first dropdown
+  //    - Select "Other (Custom name)" from the second dropdown
+  //    - Enter "HR App" as the name
+  //    - Click "Generate"
+  //    - Copy the 16-character password (it will look like: abcd efgh ijkl mnop)
+  //    - Remove all spaces when using it
+  //
+  // 3. Update the credentials below:
+  //    - _username: Your Gmail address (e.g., 'yourname@gmail.com')
+  //    - _password: The 16-character App Password (without spaces)
+  //
+  // ALTERNATIVE FREE SMTP OPTIONS:
+  // - SendGrid: smtp.sendgrid.net, port 587 (free: 100 emails/day)
+  //   Sign up: https://sendgrid.com
+  //   Username: 'apikey', Password: your API key
+  //
+  // - SMTP2GO: smtp.smtp2go.com, port 2525 (free: 1,000 emails/month)
+  //   Sign up: https://www.smtp2go.com
+  //
+  // - Brevo (Sendinblue): smtp.brevo.com, port 587 (free: 300 emails/day)
+  //   Sign up: https://www.brevo.com
+  //
+  // - Mailtrap: sandbox.smtp.mailtrap.io, port 2525 (free: 100 emails/month)
+  //   Sign up: https://mailtrap.io (if available)
+  
+  // Gmail SMTP Configuration (Default - Most Reliable)
   static const String _smtpHost = 'smtp.gmail.com';
   static const int _smtpPort = 587;
-  static const String _username = 'your-email@company.com';
-  static const String _password = 'your-app-password';
+  static const String _username = 'your-email@gmail.com'; // Replace with your Gmail address
+  static const String _password = 'your-app-password';      // Replace with Gmail App Password (16 chars)
   static const String _companyName = 'HR Management System';
-
+  
+  // For production, use environment variables or secure storage
+  // Example: static const String _username = String.fromEnvironment('SMTP_USERNAME', defaultValue: '');
+  
   late SmtpServer _smtpServer;
+  bool _isConfigured = false;
 
   EmailService() {
+    // Check if credentials are configured
+    _isConfigured = _username != 'your-email@gmail.com' && 
+                    _password != 'your-app-password' &&
+                    _username.contains('@') &&
+                    _password.length >= 10;
+    
     _smtpServer = SmtpServer(
       _smtpHost,
       port: _smtpPort,
       username: _username,
       password: _password,
       allowInsecure: false,
-      ssl: false,
+      ssl: false, // Gmail uses STARTTLS (TLS)
       ignoreBadCertificate: false,
     );
   }
+  
+  // Check if email is properly configured
+  bool get isConfigured => _isConfigured;
 
   // Send leave request notification to manager
   Future<bool> sendLeaveRequestNotification({
@@ -471,6 +518,11 @@ class EmailService {
 
   // Test email configuration
   Future<bool> testEmailConfiguration() async {
+    if (!_isConfigured) {
+      print('Email not configured. Please update SMTP credentials in EmailService.');
+      return false;
+    }
+    
     try {
       final message = Message()
         ..from = Address(_username, _companyName)
@@ -479,9 +531,11 @@ class EmailService {
         ..text = 'This is a test email to verify email configuration.';
 
       await send(message, _smtpServer);
-      return true; // For demo purposes, always return success
+      print('Email configuration test successful!');
+      return true;
     } catch (e) {
       print('Error testing email configuration: $e');
+      print('Please verify your SMTP credentials are correct.');
       return false;
     }
   }
